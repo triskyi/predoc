@@ -6,13 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Lightbulb, HeartPulse, Star, Users, ChevronRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import Card from "@/components/Card";
+
 import TestimonialCard from "@/components/TestimonialCard";
 
 export default function Home() {
   const router = useRouter();
 
-  // Animation variants for sections
   const fadeUp = {
     hidden: { opacity: 0, y: 40 },
     visible: (i = 1) => ({
@@ -23,11 +22,11 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div className="bg-white text-gray-900 min-h-screen flex flex-col">
       <Navbar />
 
       {/* Hero Section */}
-      <section className="min-h-[70vh] flex flex-col items-center justify-center px-4 pt-20 pb-12 bg-gradient-to-b from-blue-50 dark:from-gray-800 to-white dark:to-gray-900">
+      <section className="min-h-[70vh] flex flex-col items-center justify-center px-4 pt-20 pb-12 bg-gradient-to-b from-blue-50 to-white">
         <motion.div
           initial="hidden"
           animate="visible"
@@ -57,7 +56,7 @@ export default function Home() {
             transition={{ delay: 0.4, duration: 0.5 }}
           >
             <Button
-              className="text-lg px-8 py-3 shadow-xl bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-700 hover:to-blue-500 transition-all duration-300"
+              className="text-lg px-8 py-3 shadow-xl bg-gradient-to-r from-blue-600 to-blue-400 hover:from-blue-700 hover:to-blue-500 text-white rounded-full transition-all duration-300"
               onClick={() => router.push("/login")}
             >
               Get Started Now <ChevronRight className="ml-2" />
@@ -66,8 +65,8 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* Features */}
-      <section className="py-16 px-4 bg-white dark:bg-gray-900">
+      {/* Features Section */}
+      <section className="py-16 px-4 bg-gray-50">
         <div className="max-w-5xl mx-auto grid md:grid-cols-4 gap-8">
           {[
             {
@@ -99,15 +98,18 @@ export default function Home() {
               whileInView="visible"
               viewport={{ once: true }}
               variants={fadeUp}
+              className="bg-white rounded-xl shadow-md p-6 flex flex-col items-center"
             >
-              <Card {...feature} />
+              <div className="mb-4 text-blue-500">{feature.icon}</div>
+              <h3 className="font-bold text-lg mb-2">{feature.title}</h3>
+              <p className="text-gray-600 text-center">{feature.description}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
       {/* Problem & Solution */}
-      <section className="py-16 px-4 bg-blue-50 dark:bg-gray-800">
+      <section className="py-16 px-4 bg-blue-50">
         <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-12 items-center">
           <motion.div
             initial={{ opacity: 0, x: -40 }}
@@ -138,7 +140,7 @@ export default function Home() {
       </section>
 
       {/* Impact Metrics */}
-      <section className="py-16 px-4 bg-white dark:bg-gray-900">
+      <section className="py-16 px-4 bg-white">
         <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8 text-center">
           {[
             { value: "10,000+", label: "Users Supported" },
@@ -152,18 +154,19 @@ export default function Home() {
               whileInView="visible"
               viewport={{ once: true }}
               variants={fadeUp}
+              className="bg-gray-50 rounded-xl shadow p-8"
             >
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400 animate-pulse">
+              <div className="text-4xl font-bold text-blue-600 animate-pulse">
                 {metric.value}
               </div>
-              <div className="mt-2 text-lg">{metric.label}</div>
+              <div className="mt-2 text-lg text-gray-700">{metric.label}</div>
             </motion.div>
           ))}
         </div>
       </section>
 
       {/* Testimonials */}
-      <section className="py-16 px-4 bg-blue-50 dark:bg-gray-800">
+      <section className="py-16 px-4 bg-blue-50">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold mb-8">What People Say</h2>
           <div className="grid md:grid-cols-2 gap-8">
@@ -172,6 +175,7 @@ export default function Home() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.7 }}
+              className="bg-white rounded-xl shadow p-6"
             >
               <TestimonialCard
                 name="Dr. Namutebi"
@@ -183,6 +187,7 @@ export default function Home() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.7, delay: 0.2 }}
+              className="bg-white rounded-xl shadow p-6"
             >
               <TestimonialCard
                 name="Patient - Kampala"
@@ -194,7 +199,7 @@ export default function Home() {
       </section>
 
       {/* Newsletter Subscription */}
-      <section className="py-16 px-4 bg-white dark:bg-gray-900">
+      <section className="py-16 px-4 bg-white">
         <motion.div
           className="max-w-xl mx-auto text-center"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -210,10 +215,13 @@ export default function Home() {
             <input
               type="email"
               placeholder="Your email"
-              className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-4 py-2 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 shadow"
               required
             />
-            <Button type="submit" className="px-6 py-2">
+            <Button
+              type="submit"
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow transition-all duration-300"
+            >
               Subscribe
             </Button>
           </form>

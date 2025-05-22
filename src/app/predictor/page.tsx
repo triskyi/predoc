@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { useSession, signOut } from "next-auth/react";
+import { useTheme } from "next-themes";
 
 import {
   UserPlus,
@@ -21,6 +23,25 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, Skeleton } from "@heroui/react";
+import { Activity, LineChartIcon } from "lucide-react";
+
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Legend,
+  BarChart,
+  Bar,
+} from "recharts";
+
 const symptoms = [
   "fever",
   "chills",
@@ -55,16 +76,14 @@ const regions = [
 
 export default function PredictorPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const { theme, setTheme } = useTheme();
 
   // State declarations
   const [tab, setTab] = useState("dashboard");
 
   // Helper for symptoms list (for forms)
   const symptomsList = symptoms;
-
-  // If you need to compute data based on recordForm, do it inside the component after recordForm is defined.
-  // Example usage (not global):
-  // const data = Object.fromEntries(symptomsList.map(symptom => [symptom, recordForm.symptoms.includes(symptom) ? 1 : 0]));
 
   type Patient = {
     id: string;
@@ -139,14 +158,13 @@ export default function PredictorPage() {
   const [showPatientDetails, setShowPatientDetails] = useState<string | null>(
     null
   );
-  const [dark, setDark] = useState(false);
   const defaultProfile = {
     name: "",
     email: "",
     phone: "",
     role: "",
     bio: "",
-    photo: "/default-profile.png",
+    photo: "/avatar.png",
   };
   const [profile, setProfile] = useState(defaultProfile);
   const [loadingPatients, setLoadingPatients] = useState(true);
@@ -173,31 +191,40 @@ export default function PredictorPage() {
       console.error("Error fetching user profile:", error);
     }
   }
-  useEffect(() => {
-    // Replace with the actual user ID (from auth/session)
-    const userId = 1; // or get from your auth context/session
-    fetchUserProfile(userId);
-  }, []);
 
-  // Fetch data on mount
+  const lastFetchedUserId = useRef<string | number | null>(null);
+
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
+    if (status === "loading") return; // Wait for session to load
+    if (!session) {
       router.replace("/login");
       return;
     }
+    // Fetch user profile using session.user.id or session.user.email
+    const userId = session.user.id ?? session.user.email;
+    if (
+      userId !== undefined &&
+      userId !== null &&
+      userId !== lastFetchedUserId.current
+    ) {
+      lastFetchedUserId.current = userId;
+      fetchUserProfile(userId);
+    }
+  }, [session, status, router]);
 
+  // Fetch data on mount
+  useEffect(() => {
     const fetchData = async () => {
       try {
         const [patientsRes, recordsRes, analyticsRes] = await Promise.all([
           fetch("/api/patients", {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${session?.accessToken}` },
           }),
           fetch("/api/records", {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${session?.accessToken}` },
           }),
           fetch("/api/analytics", {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${session?.accessToken}` },
           }),
         ]);
 
@@ -222,39 +249,18 @@ export default function PredictorPage() {
     };
 
     fetchData();
-  }, [router]);
+  }, [session]);
 
-  // Theme handling
-  useEffect(() => {
-    const theme = localStorage.getItem("theme");
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-      setDark(true);
-    } else {
-      document.documentElement.classList.remove("dark");
-      setDark(false);
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    setDark((prev) => {
-      const newDark = !prev;
-      document.documentElement.classList.toggle("dark", newDark);
-      localStorage.setItem("theme", newDark ? "dark" : "light");
-      return newDark;
-    });
-  };
   const [selectedRecord, setSelectedRecord] = useState<RecordType | null>(null);
   // API handlers
   const handleAddPatient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const token = localStorage.getItem("token");
     try {
       const res = await fetch("/api/patients", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${session?.accessToken}`,
         },
         body: JSON.stringify({
           fullName: newPatient.fullName,
@@ -263,7 +269,9 @@ export default function PredictorPage() {
           weight: Number(newPatient.weight),
           region: newPatient.region,
           pregnantStatus:
-            newPatient.gender === "female" ? newPatient.pregnantStatus : null,
+            newPatient.gender === "female" && newPatient.pregnantStatus
+              ? newPatient.pregnantStatus
+              : null, // <-- Only send a valid enum or null
           g6pdDeficiency: newPatient.g6pdDeficiency,
         }),
       });
@@ -307,21 +315,16 @@ export default function PredictorPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    router.push("/login");
+    signOut({ callbackUrl: "/login" });
   };
-
-  // ...inside your PredictorPage component...
 
   const handleAddRecord = async (e: React.FormEvent, patientId: string) => {
     e.preventDefault();
     try {
-      // 1. Get patient info from your API
       const patientRes = await fetch(`/api/patients/${patientId}`);
       if (!patientRes.ok) throw new Error("Failed to fetch patient info");
       const patient = await patientRes.json();
 
-      // 2. Prepare data for Flask /predict
       const data = {
         ...recordForm.symptoms.reduce((acc, s) => ({ ...acc, [s]: 1 }), {}),
         Age: patient.age,
@@ -337,10 +340,9 @@ export default function PredictorPage() {
         First_Trimester_Pregnant:
           patient.pregnantStatus === "first_trimester" ? 1 : 0,
         G6PD_Deficiency: patient.g6pdDeficiency ? 1 : 0,
-        Previous_Medications: recordForm.previousMedications || "None",
+        Previous_Medications: recordForm.previousMedications || "",
       };
 
-      // 3. Call Flask /predict
       const predictRes = await fetch("http://localhost:5000/predict", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -354,19 +356,21 @@ export default function PredictorPage() {
       }
       const treatment = predictResult.prediction.treatment;
       const { drug, ...rest } = treatment;
-      const notes = JSON.stringify(rest, null, 2); // pretty JSON
+      const notes = JSON.stringify(rest, null, 2);
 
-      // 4. Save record to your DB via /api/records
       const saveRes = await fetch("/api/records", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.accessToken}`,
+        },
         body: JSON.stringify({
           patientId: Number(patientId),
           symptoms: recordForm.symptoms,
           previousMedications: recordForm.previousMedications,
           predictedDisease: predictResult.prediction.disease,
           recommendedTreatment: drug,
-          notes, // <-- all other fields as a string
+          notes,
         }),
       });
 
@@ -375,10 +379,8 @@ export default function PredictorPage() {
         return;
       }
 
-      // 5. Optionally refresh records list
       setShowAddRecord(null);
       setRecordForm({ patientId: "", symptoms: [], previousMedications: "" });
-      // Optionally: refetch records here
 
       alert("Medical record added and prediction saved!");
     } catch (err: unknown) {
@@ -433,7 +435,6 @@ export default function PredictorPage() {
     URL.revokeObjectURL(url);
   }
 
-  // Recursively render notes as nested lists or plain text
   function renderNotes(obj: unknown): React.ReactNode {
     if (typeof obj === "object" && obj !== null) {
       return (
@@ -454,12 +455,49 @@ export default function PredictorPage() {
     return String(obj);
   }
 
+  // Pie chart data for Disease Distribution
+  const COLORS = ["#34d399", "#60a5fa", "#fbbf24", "#f87171", "#a78bfa"];
+  const diseaseData =
+    records.length > 0
+      ? Object.entries(
+          records.reduce((acc, r) => {
+            const d = r.predictionResult?.predictedDisease || "Unknown";
+            acc[d] = (acc[d] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        ).map(([name, value]) => ({ name, value }))
+      : [];
+
+  // Line chart data for Records Over Time
+  const recordsOverTime =
+    records.length > 0
+      ? records.reduce((acc, r) => {
+          const date = new Date(r.createdAt).toLocaleDateString();
+          acc[date] = (acc[date] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      : {};
+  const lineData = Object.entries(recordsOverTime).map(([date, count]) => ({
+    date,
+    count,
+  }));
+
+  // Bar chart data for Record Comparison (example: count by region)
+  const barData =
+    patients.length > 0
+      ? regions.map((region) => ({
+          category: region,
+          value: records.filter(
+            (r) => patients.find((p) => p.id === r.patientId)?.region === region
+          ).length,
+        }))
+      : [];
+
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      {/* Sidebar */}
       <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-800 flex flex-col py-6 px-4 min-h-screen fixed top-0 left-0 h-screen z-30">
         <div className="flex items-center gap-2 mb-8">
-          <Image src="/logo.png" alt="Logo" width={100} height={100} />
+          <Image src="/logo.png" alt="Logo" width={50} height={50} />
           <span className="font-bold text-xl text-gray-800 dark:text-gray-100">
             PREDOC
           </span>
@@ -484,6 +522,15 @@ export default function PredictorPage() {
                 </button>
               </li>
             ))}
+            <li>
+              <button
+                className="flex items-center w-full px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition gap-2 mt-4"
+                onClick={() => router.push("/ai-playground")}
+              >
+                <Package className="mr-2" size={18} />
+                AI Playground
+              </button>
+            </li>
           </ul>
         </nav>
         <div className="mt-auto flex flex-col gap-2 items-start">
@@ -493,16 +540,9 @@ export default function PredictorPage() {
               {profile.name}
             </span>
           </div>
-          <Button
-            className="w-full mt-2 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 flex items-center gap-2"
-            onClick={handleLogout}
-          >
-            <LogOut size={18} /> Logout
-          </Button>
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex-1 flex flex-col ml-64 min-h-screen">
         <header className="flex items-center justify-between px-8 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 fixed top-0 left-64 right-0 z-20">
           <div className="flex items-center gap-2">
@@ -525,13 +565,21 @@ export default function PredictorPage() {
               />
             </div>
             <Button
-              className="bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 p-2"
-              onClick={toggleTheme}
+              type="button"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 p-2 rounded-full"
+              aria-label="Toggle theme"
             >
-              {dark ? <Sun size={18} /> : <Moon size={18} />}
+              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
             <Button className="bg-transparent hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 p-2">
               <Bell size={18} />
+            </Button>
+            <Button
+              className="hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 p-2"
+              onClick={handleLogout}
+            >
+              <LogOut size={18} />
             </Button>
             <button
               className="rounded-full border-2 border-blue-400 dark:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
@@ -550,10 +598,45 @@ export default function PredictorPage() {
 
         <main className="flex-1 bg-gray-50 dark:bg-gray-900 mt-24 p-8 overflow-y-auto">
           <div className="max-w-7xl mx-auto">
-            {/* Dashboard Tab */}
             {tab === "dashboard" && (
               <section>
-                {analytics ? (
+                {loadingPatients || loadingRecords || !analytics ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                      {[...Array(4)].map((_, i) => (
+                        <Card
+                          key={i}
+                          className="w-full space-y-5 p-4"
+                          radius="lg"
+                        >
+                          <Skeleton className="rounded-lg">
+                            <div className="h-10 w-10 rounded-lg bg-default-300" />
+                          </Skeleton>
+                          <div className="space-y-3">
+                            <Skeleton className="w-3/5 rounded-lg">
+                              <div className="h-3 w-3/5 rounded-lg bg-default-200" />
+                            </Skeleton>
+                            <Skeleton className="w-4/5 rounded-lg">
+                              <div className="h-3 w-4/5 rounded-lg bg-default-200" />
+                            </Skeleton>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                      {[...Array(2)].map((_, i) => (
+                        <Card
+                          key={i}
+                          className="bg-white dark:bg-gray-800 rounded-lg shadow p-6"
+                        >
+                          <Skeleton className="rounded-lg">
+                            <div className="h-40 rounded-lg bg-default-300" />
+                          </Skeleton>
+                        </Card>
+                      ))}
+                    </div>
+                  </>
+                ) : (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
@@ -590,42 +673,134 @@ export default function PredictorPage() {
                         <Package className="text-orange-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
                           {
-                            records.filter((r) => r.treatmentRecommendation)
-                              .length
+                            records.filter(
+                              (r) =>
+                                typeof r.predictionResult
+                                  ?.treatmentRecommendation === "object" &&
+                                r.predictionResult?.treatmentRecommendation !==
+                                  null &&
+                                "recommendedTreatment" in
+                                  r.predictionResult.treatmentRecommendation &&
+                                (
+                                  r.predictionResult
+                                    .treatmentRecommendation as {
+                                    recommendedTreatment?: string;
+                                  }
+                                ).recommendedTreatment
+                            ).length
                           }
                         </div>
                         <div className="text-gray-500 text-sm">Treatments</div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                      {/* Disease Distribution */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                        <h3 className="font-semibold mb-4">
-                          Disease Distribution
-                        </h3>
-                        {/* Simple pie chart would go here */}
-                        <div className="text-center">Pie chart placeholder</div>
-                      </div>
-                      {/* Records Over Time */}
-                      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                        <h3 className="font-semibold mb-4">
-                          Records Over Time
-                        </h3>
-                        {/* Line chart would go here */}
-                        <div className="text-center">
-                          Line chart placeholder
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                      {/* Disease Distribution (Pie Chart) */}
+                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Activity className="text-sky-500" />
+                          <h3 className="text-lg font-semibold">
+                            Disease Distribution
+                          </h3>
                         </div>
-                      </div>
+                        {diseaseData.length === 0 ? (
+                          <div className="text-center text-gray-400">
+                            No data available
+                          </div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <PieChart>
+                              <Pie
+                                data={diseaseData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={80}
+                                innerRadius={40}
+                                label
+                              >
+                                {diseaseData.map((entry, idx) => (
+                                  <Cell
+                                    key={`cell-${idx}`}
+                                    fill={COLORS[idx % COLORS.length]}
+                                  />
+                                ))}
+                              </Pie>
+                              <Tooltip />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )}
+                      </Card>
+
+                      {/* Records Over Time (Line Chart) */}
+                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <LineChartIcon className="text-yellow-500" />
+                          <h3 className="text-lg font-semibold">
+                            Records Over Time
+                          </h3>
+                        </div>
+                        {lineData.length === 0 ? (
+                          <div className="text-center text-gray-400">
+                            No data available
+                          </div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={lineData}>
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#CBD5E0"
+                              />
+                              <XAxis dataKey="date" />
+                              <YAxis />
+                              <Tooltip />
+                              <Legend />
+                              <Line
+                                type="monotone"
+                                dataKey="count"
+                                stroke="#63B3ED"
+                                strokeWidth={2}
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        )}
+                      </Card>
+
+                      {/* Additional Chart: Records Comparison (Bar Chart) */}
+                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                        <div className="flex items-center gap-2 mb-4">
+                          <LineChartIcon className="text-pink-500" />
+                          <h3 className="text-lg font-semibold">
+                            Record Comparison
+                          </h3>
+                        </div>
+                        {barData.length === 0 ? (
+                          <div className="text-center text-gray-400">
+                            No data available
+                          </div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={barData}>
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                stroke="#CBD5E0"
+                              />
+                              <XAxis dataKey="category" />
+                              <YAxis />
+                              <Tooltip />
+                              <Legend />
+                              <Bar dataKey="value" fill="#F687B3" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )}
+                      </Card>
                     </div>
                   </>
-                ) : (
-                  <p>Loading analytics...</p>
                 )}
               </section>
             )}
 
-            {/* Patients Tab */}
             {tab === "patients" && (
               <section>
                 <div className="flex items-center justify-between mb-6">
@@ -634,13 +809,22 @@ export default function PredictorPage() {
                   </h2>
                   <Button
                     onClick={() => setShowAddPatient(true)}
-                    className="bg-blue-600 text-white hover:bg-blue-700"
+                    className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-blue-600 to-purple-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                   >
                     <UserPlus className="mr-2" size={18} /> Add Patient
                   </Button>
                 </div>
                 {loadingPatients ? (
-                  <p>Loading patients...</p>
+                  <Card className="w-full space-y-5 p-4" radius="lg">
+                    <Skeleton className="rounded-lg">
+                      <div className="h-8 w-full rounded-lg bg-default-300" />
+                    </Skeleton>
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="rounded-lg">
+                        <div className="h-6 w-full rounded-lg bg-default-200" />
+                      </Skeleton>
+                    ))}
+                  </Card>
                 ) : (
                   <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                     <table className="w-full text-left border-collapse">
@@ -665,16 +849,16 @@ export default function PredictorPage() {
                             <td className="p-2">{p.region || "N/A"}</td>
                             <td className="p-2 flex gap-2">
                               <Button
-                                className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                                className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                                 onClick={() => setShowAddRecord(p.id)}
                               >
-                                + Record
+                                <FileText size={16} /> + Record
                               </Button>
                               <Button
-                                className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+                                className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-green-400 to-green-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                                 onClick={() => setShowPatientDetails(p.id)}
                               >
-                                <Info size={16} />
+                                <Info size={16} /> Details
                               </Button>
                             </td>
                           </tr>
@@ -683,8 +867,6 @@ export default function PredictorPage() {
                     </table>
                   </div>
                 )}
-
-                {/* Add Patient Modal */}
                 {showAddPatient && (
                   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md">
@@ -841,8 +1023,6 @@ export default function PredictorPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Add Record Modal */}
                 {showAddRecord && (
                   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-2xl">
@@ -931,7 +1111,7 @@ export default function PredictorPage() {
                                     }))
                                   }
                                 />
-                                {s}
+                                {s.replace(/_/g, " ")}
                               </label>
                             ))}
                           </div>
@@ -963,17 +1143,15 @@ export default function PredictorPage() {
                           </Button>
                           <Button
                             type="submit"
-                            className="bg-blue-600 text-white hover:bg-blue-700"
+                            className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                           >
-                            Add Record
+                            Predict
                           </Button>
                         </div>
                       </form>
                     </div>
                   </div>
                 )}
-
-                {/* Patient Details Modal */}
                 {showPatientDetails && (
                   <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg w-full max-w-2xl">
@@ -990,7 +1168,7 @@ export default function PredictorPage() {
                               <p>Patient not found.</p>
                               <div className="flex justify-end mt-4">
                                 <Button
-                                  className="bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-400"
+                                  className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                                   onClick={() => setShowPatientDetails(null)}
                                 >
                                   Close
@@ -1079,7 +1257,7 @@ export default function PredictorPage() {
                             )}
                             <div className="flex justify-end mt-4">
                               <Button
-                                className="bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-gray-400"
+                                className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                                 onClick={() => setShowPatientDetails(null)}
                               >
                                 Close
@@ -1094,7 +1272,6 @@ export default function PredictorPage() {
               </section>
             )}
 
-            {/* Records Tab */}
             {tab === "records" && (
               <section>
                 <h2 className="text-2xl font-bold flex items-center gap-3 mb-8 text-blue-700 dark:text-blue-300">
@@ -1104,36 +1281,34 @@ export default function PredictorPage() {
                   />
                   Medical Records & Predictions
                 </h2>
-                {/* Add Medical Record Button */}
-                <div className="flex justify-end mb-6">
-                  <Button
-                    className="bg-gradient-to-r from-blue-600 to-blue-400 text-white font-semibold shadow-md hover:from-blue-700 hover:to-blue-500 transition"
-                    onClick={() => setShowAddRecord("new")}
-                  >
-                    + Add Medical Record
-                  </Button>
-                </div>
+                <div className="flex justify-end mb-6"></div>
                 <div className="flex gap-3 mb-6">
                   <Button
-                    className="bg-gradient-to-r from-green-600 to-green-400 text-white font-semibold shadow-md hover:from-green-700 hover:to-green-500 transition"
+                    className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-sky-400 via-yellow-400 to-yellow-500 hover:from-sky-500 hover:via-yellow-500 hover:to-yellow-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                     onClick={() => downloadCSV(records, patients)}
                   >
+                    <Package size={18} />
                     Download CSV
                   </Button>
                   <Button
-                    className="bg-gradient-to-r from-purple-600 to-purple-400 text-white font-semibold shadow-md hover:from-purple-700 hover:to-purple-500 transition"
+                    className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-purple-600 to-purple-400 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                     onClick={() => window.print()}
                   >
+                    <FileText size={18} />
                     Print
                   </Button>
                 </div>
                 {loadingRecords ? (
-                  <div className="flex items-center justify-center h-32">
-                    <span className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-600 mr-3"></span>
-                    <span className="text-blue-700 font-medium">
-                      Loading records...
-                    </span>
-                  </div>
+                  <Card className="w-full space-y-5 p-4" radius="lg">
+                    <Skeleton className="rounded-lg">
+                      <div className="h-8 w-full rounded-lg bg-default-300" />
+                    </Skeleton>
+                    {[...Array(5)].map((_, i) => (
+                      <Skeleton key={i} className="rounded-lg">
+                        <div className="h-6 w-full rounded-lg bg-default-200" />
+                      </Skeleton>
+                    ))}
+                  </Card>
                 ) : (
                   <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
                     <table className="w-full text-left border-separate border-spacing-y-2">
@@ -1222,7 +1397,6 @@ export default function PredictorPage() {
                         ))}
                       </tbody>
                     </table>
-                    {/* Notes display below table */}
                     {selectedRecord && (
                       <div className="mt-8 p-5 rounded-lg bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 shadow">
                         <div className="flex items-center justify-between mb-2">
@@ -1235,7 +1409,7 @@ export default function PredictorPage() {
                             }
                           </h3>
                           <Button
-                            className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 px-3 py-1 rounded"
+                            className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                             onClick={() => setSelectedRecord(null)}
                           >
                             Close
@@ -1268,7 +1442,6 @@ export default function PredictorPage() {
               </section>
             )}
 
-            {/* Profile Tab */}
             {tab === "profile" && (
               <section>
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8 overflow-hidden">
@@ -1351,7 +1524,7 @@ export default function PredictorPage() {
                       />
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <Button className="bg-blue-600 text-white hover:bg-blue-700">
+                      <Button className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2">
                         Save Changes
                       </Button>
                     </div>

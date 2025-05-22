@@ -36,36 +36,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // 1. Create MedicalRecord
+    console.log("Saving notes:", notes);
+
     const record = await prisma.medicalRecord.create({
       data: {
         patientId: Number(patientId),
         symptoms,
         previousMedications,
+        predictionResult: {
+          create: {
+            predictedDisease,
+            treatmentRecommendation: {
+              create: {
+                recommendedTreatment,
+                notes: notes && notes.trim() !== "" ? notes : "No notes", // fallback if notes is empty
+              },
+            },
+          },
+        },
       },
     });
 
-    // 2. Create PredictionResult
-    const predictionResult = await prisma.predictionResult.create({
-      data: {
-        medicalRecordId: record.id,
-        predictedDisease,
-      },
-    });
-
-    // 3. Create TreatmentRecommendation
-    const treatmentRecommendation = await prisma.treatmentRecommendation.create({
-      data: {
-        predictionResultId: predictionResult.id,
-        recommendedTreatment,
-        notes,
-      },
-    });
-
-    return NextResponse.json(
-      { record, predictionResult, treatmentRecommendation },
-      { status: 201 }
-    );
+    return NextResponse.json(record, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to save record" }, { status: 500 });
   }
