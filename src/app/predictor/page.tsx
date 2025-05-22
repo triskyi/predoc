@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+
 import {
   UserPlus,
   Users,
@@ -51,24 +53,6 @@ const regions = [
   "Central America west of Panama",
 ];
 
-type RecordType = {
-  id: string;
-  patientId: string;
-  symptoms: string[];
-  previousMedications: string;
-  createdAt: string;
-  predictionResult?: {
-    predictedDisease: string;
-    [key: string]: any;
-  };
-  treatmentRecommendation?: {
-    recommendedTreatment: string;
-    notes?: string;
-    [key: string]: any;
-  };
-  [key: string]: any;
-};
-
 export default function PredictorPage() {
   const router = useRouter();
 
@@ -91,7 +75,7 @@ export default function PredictorPage() {
     region?: string;
     pregnantStatus?: string;
     g6pdDeficiency?: boolean;
-    [key: string]: any;
+    [key: string]: string | number | boolean | undefined;
   };
   const [patients, setPatients] = useState<Patient[]>([]);
   type RecordType = {
@@ -102,14 +86,42 @@ export default function PredictorPage() {
     createdAt: string;
     predictionResult?: {
       predictedDisease: string;
-      [key: string]: any;
+      [key: string]:
+        | string
+        | number
+        | boolean
+        | string[]
+        | undefined
+        | {
+            predictedDisease?: string;
+            [key: string]: unknown;
+          }
+        | {
+            recommendedTreatment?: string;
+            notes?: string;
+            [key: string]: unknown;
+          };
     };
     treatmentRecommendation?: {
       recommendedTreatment: string;
       notes?: string;
-      [key: string]: any;
+      [key: string]: string | number | boolean | undefined;
     };
-    [key: string]: any;
+    [key: string]:
+      | string
+      | number
+      | boolean
+      | string[]
+      | undefined
+      | {
+          predictedDisease?: string;
+          [key: string]: unknown;
+        }
+      | {
+          recommendedTreatment?: string;
+          notes?: string;
+          [key: string]: unknown;
+        };
   };
   const [recordForm, setRecordForm] = useState<{
     patientId?: string;
@@ -137,7 +149,6 @@ export default function PredictorPage() {
     photo: "/default-profile.png",
   };
   const [profile, setProfile] = useState(defaultProfile);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [analytics, setAnalytics] = useState(null);
@@ -291,7 +302,6 @@ export default function PredictorPage() {
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setPhotoFile(e.target.files[0]);
       setProfile({ ...profile, photo: URL.createObjectURL(e.target.files[0]) });
     }
   };
@@ -371,8 +381,12 @@ export default function PredictorPage() {
       // Optionally: refetch records here
 
       alert("Medical record added and prediction saved!");
-    } catch (err: any) {
-      alert(err.message || "Error adding record");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert(err.message || "Error adding record");
+      } else {
+        alert("Error adding record");
+      }
     }
   };
 
@@ -390,9 +404,20 @@ export default function PredictorPage() {
       new Date(r.createdAt).toLocaleDateString(),
       r.symptoms.join(", "),
       r.predictionResult?.predictedDisease || "Pending",
-      r.predictionResult?.treatmentRecommendation?.recommendedTreatment ||
-        "Pending",
-      r.predictionResult?.treatmentRecommendation?.notes || "",
+      (typeof r.predictionResult?.treatmentRecommendation === "object" &&
+      r.predictionResult?.treatmentRecommendation !== null
+        ? (
+            r.predictionResult.treatmentRecommendation as {
+              recommendedTreatment?: string;
+            }
+          ).recommendedTreatment
+        : undefined) || "Pending",
+      (typeof r.predictionResult?.treatmentRecommendation === "object" &&
+      r.predictionResult?.treatmentRecommendation !== null &&
+      "notes" in r.predictionResult.treatmentRecommendation
+        ? (r.predictionResult.treatmentRecommendation as { notes?: string })
+            .notes
+        : "") || "",
     ]);
     const csvContent = [headers, ...rows]
       .map((row) =>
@@ -409,18 +434,20 @@ export default function PredictorPage() {
   }
 
   // Recursively render notes as nested lists or plain text
-  function renderNotes(obj: any): React.ReactNode {
+  function renderNotes(obj: unknown): React.ReactNode {
     if (typeof obj === "object" && obj !== null) {
       return (
         <ul className="list-disc ml-6">
-          {Object.entries(obj).map(([key, value]) => (
-            <li key={key}>
-              <strong>{key}:</strong>{" "}
-              {typeof value === "object" && value !== null
-                ? renderNotes(value)
-                : String(value)}
-            </li>
-          ))}
+          {Object.entries(obj as Record<string, unknown>).map(
+            ([key, value]) => (
+              <li key={key}>
+                <strong>{key}:</strong>{" "}
+                {typeof value === "object" && value !== null
+                  ? renderNotes(value)
+                  : String(value)}
+              </li>
+            )
+          )}
         </ul>
       );
     }
@@ -432,7 +459,7 @@ export default function PredictorPage() {
       {/* Sidebar */}
       <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-800 flex flex-col py-6 px-4 min-h-screen fixed top-0 left-0 h-screen z-30">
         <div className="flex items-center gap-2 mb-8">
-          <img src="/logo.png" alt="PREDOC Logo" className="w-8 h-8" />
+          <Image src="/logo.png" alt="Logo" width={100} height={100} />
           <span className="font-bold text-xl text-gray-800 dark:text-gray-100">
             PREDOC
           </span>
@@ -510,9 +537,11 @@ export default function PredictorPage() {
               className="rounded-full border-2 border-blue-400 dark:border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
               onClick={() => setTab("profile")}
             >
-              <img
+              <Image
                 src={profile.photo}
                 alt="User"
+                width={32}
+                height={32}
                 className="w-8 h-8 rounded-full object-cover"
               />
             </button>
@@ -1162,12 +1191,25 @@ export default function PredictorPage() {
                               )}
                             </td>
                             <td className="p-3">
-                              {r.predictionResult?.treatmentRecommendation
-                                ?.recommendedTreatment ? (
+                              {typeof r.predictionResult
+                                ?.treatmentRecommendation === "object" &&
+                              r.predictionResult?.treatmentRecommendation !==
+                                null &&
+                              "recommendedTreatment" in
+                                r.predictionResult.treatmentRecommendation &&
+                              (
+                                r.predictionResult.treatmentRecommendation as {
+                                  recommendedTreatment?: string;
+                                }
+                              ).recommendedTreatment ? (
                                 <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 text-xs font-semibold">
                                   {
-                                    r.predictionResult.treatmentRecommendation
-                                      .recommendedTreatment
+                                    (
+                                      r.predictionResult
+                                        .treatmentRecommendation as {
+                                        recommendedTreatment?: string;
+                                      }
+                                    ).recommendedTreatment
                                   }
                                 </span>
                               ) : (
@@ -1200,8 +1242,17 @@ export default function PredictorPage() {
                           </Button>
                         </div>
                         <pre className="whitespace-pre-wrap break-words text-gray-700 dark:text-gray-200 text-sm">
-                          {selectedRecord.predictionResult
-                            ?.treatmentRecommendation?.notes
+                          {typeof selectedRecord.predictionResult
+                            ?.treatmentRecommendation === "object" &&
+                          selectedRecord.predictionResult
+                            ?.treatmentRecommendation !== null &&
+                          "notes" in
+                            selectedRecord.predictionResult
+                              .treatmentRecommendation &&
+                          typeof selectedRecord.predictionResult
+                            .treatmentRecommendation.notes === "string" &&
+                          selectedRecord.predictionResult
+                            .treatmentRecommendation.notes
                             ? renderNotes(
                                 JSON.parse(
                                   selectedRecord.predictionResult
@@ -1223,9 +1274,11 @@ export default function PredictorPage() {
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-8 overflow-hidden">
                   <div className="h-32 bg-gradient-to-r from-blue-400 to-purple-400 relative">
                     <div className="absolute left-1/2 -bottom-12 transform -translate-x-1/2">
-                      <img
+                      <Image
                         src={profile.photo}
                         alt="Profile"
+                        width={96}
+                        height={96}
                         className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-800 object-cover shadow-lg"
                       />
                     </div>
@@ -1305,9 +1358,11 @@ export default function PredictorPage() {
                   </div>
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
                     <h3 className="font-semibold mb-2">Your Photo</h3>
-                    <img
+                    <Image
                       src={profile.photo}
                       alt="Profile"
+                      width={96}
+                      height={96}
                       className="w-24 h-24 rounded-full border mb-4 object-cover"
                     />
                     <input

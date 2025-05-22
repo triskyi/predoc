@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(patient, { status: 201 });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to add patient" },
       { status: 500 }

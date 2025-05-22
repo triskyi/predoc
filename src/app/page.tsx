@@ -2,15 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Lightbulb,
-  HeartPulse,
-  Star,
-  Users,
-  ChevronRight,
-} from "lucide-react";
+import { Lightbulb, HeartPulse, Star, Users, ChevronRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Card from "@/components/Card";
@@ -55,7 +48,8 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.8 }}
           >
-            AI-powered disease detection and safe drug recommendations for better healthcare outcomes.
+            AI-powered disease detection and safe drug recommendations for
+            better healthcare outcomes.
           </motion.p>
           <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
@@ -75,23 +69,29 @@ export default function Home() {
       {/* Features */}
       <section className="py-16 px-4 bg-white dark:bg-gray-900">
         <div className="max-w-5xl mx-auto grid md:grid-cols-4 gap-8">
-          {[{
-            icon: <Lightbulb size={32} />,
-            title: "Disease Detection",
-            description: "Identify illnesses quickly with AI-driven analysis."
-          }, {
-            icon: <HeartPulse size={32} />,
-            title: "Treatment Recommendations",
-            description: "Get safe, guideline-based drug suggestions."
-          }, {
-            icon: <Star size={32} />,
-            title: "Symptom Checker",
-            description: "Input symptoms and receive instant feedback."
-          }, {
-            icon: <Users size={32} />,
-            title: "Patient Data Management",
-            description: "Securely manage and review patient history."
-          }].map((feature, i) => (
+          {[
+            {
+              icon: <Lightbulb size={32} />,
+              title: "Disease Detection",
+              description:
+                "Identify illnesses quickly with AI-driven analysis.",
+            },
+            {
+              icon: <HeartPulse size={32} />,
+              title: "Treatment Recommendations",
+              description: "Get safe, guideline-based drug suggestions.",
+            },
+            {
+              icon: <Star size={32} />,
+              title: "Symptom Checker",
+              description: "Input symptoms and receive instant feedback.",
+            },
+            {
+              icon: <Users size={32} />,
+              title: "Patient Data Management",
+              description: "Securely manage and review patient history.",
+            },
+          ].map((feature, i) => (
             <motion.div
               key={feature.title}
               custom={i}
@@ -117,7 +117,9 @@ export default function Home() {
           >
             <h2 className="text-3xl font-bold mb-4">The Challenge</h2>
             <p className="text-lg">
-              Many regions face delays, errors, and inefficiencies in healthcare due to paper-based records, limited training, and high patient loads.
+              Many regions face delays, errors, and inefficiencies in healthcare
+              due to paper-based records, limited training, and high patient
+              loads.
             </p>
           </motion.div>
           <motion.div
@@ -128,7 +130,8 @@ export default function Home() {
           >
             <h2 className="text-3xl font-bold mb-4">Our Solution</h2>
             <p className="text-lg">
-              PREDOC empowers clinicians with instant, AI-powered insights, reducing errors and improving patient outcomes.
+              PREDOC empowers clinicians with instant, AI-powered insights,
+              reducing errors and improving patient outcomes.
             </p>
           </motion.div>
         </div>
@@ -140,7 +143,7 @@ export default function Home() {
           {[
             { value: "10,000+", label: "Users Supported" },
             { value: "98%", label: "Diagnosis Accuracy" },
-            { value: "5,000+", label: "Improved Outcomes" }
+            { value: "5,000+", label: "Improved Outcomes" },
           ].map((metric, i) => (
             <motion.div
               key={metric.label}
@@ -150,7 +153,9 @@ export default function Home() {
               viewport={{ once: true }}
               variants={fadeUp}
             >
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400 animate-pulse">{metric.value}</div>
+              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400 animate-pulse">
+                {metric.value}
+              </div>
               <div className="mt-2 text-lg">{metric.label}</div>
             </motion.div>
           ))}
@@ -198,7 +203,9 @@ export default function Home() {
           transition={{ duration: 0.7 }}
         >
           <h2 className="text-2xl font-bold mb-4">Stay Updated</h2>
-          <p className="mb-6">Subscribe to our newsletter for updates and health tips.</p>
+          <p className="mb-6">
+            Subscribe to our newsletter for updates and health tips.
+          </p>
           <form className="flex flex-col sm:flex-row gap-4 justify-center">
             <input
               type="email"
@@ -206,7 +213,9 @@ export default function Home() {
               className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
               required
             />
-            <Button type="submit" className="px-6 py-2">Subscribe</Button>
+            <Button type="submit" className="px-6 py-2">
+              Subscribe
+            </Button>
           </form>
         </motion.div>
       </section>

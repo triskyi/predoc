@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       { record, predictionResult, treatmentRecommendation },
       { status: 201 }
     );
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: "Failed to save record" }, { status: 500 });
   }
 }

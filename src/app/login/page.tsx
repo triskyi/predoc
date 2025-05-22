@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Mail, Lock, EyeOff, Eye, LogIn, ShieldCheck } from "lucide-react";
+import { Mail, Lock, EyeOff, Eye, LogIn } from "lucide-react";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -40,9 +41,11 @@ export default function LoginPage() {
             className="w-full flex items-center justify-center gap-2 mb-6"
             disabled
           >
-            <img
+            <Image
               src="https://www.svgrepo.com/show/475656/google-color.svg"
               alt="Google"
+              width={20}
+              height={20}
               className="w-5 h-5"
             />
             Sign in with Google
@@ -142,7 +145,7 @@ export default function LoginPage() {
         {/* Right: Welcome Panel */}
         <div className="hidden md:flex flex-col justify-center items-center flex-1 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 p-10">
           <div className="flex flex-col items-center">
-            <img src="/logo.png" alt="PREDOC Logo" className="w-16 h-16 mb-4" />
+            <Image src="/logo.png" alt="Logo" width={100} height={100} />
             <span className="font-bold text-2xl text-blue-700 dark:text-blue-400 mb-2">
               PREDOC
             </span>

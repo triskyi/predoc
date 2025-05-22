@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Mail } from "lucide-react";
+import Image from "next/image";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -31,14 +32,16 @@ export default function ForgotPasswordPage() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-4xl flex flex-col md:flex-row overflow-hidden">
         {/* Left: Form */}
         <div className="flex-1 p-8 flex flex-col justify-center">
-          <h2 className="text-xl font-bold mb-6 text-gray-800 dark:text-gray-100">Email</h2>
+          <h2 className="text-xl font-bold mb-6 text-gray-800 dark:text-gray-100">
+            Email
+          </h2>
           <form onSubmit={handleReset} className="flex flex-col gap-4">
             <div className="relative">
               <input
                 type="email"
                 className="w-full pl-10 pr-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400 dark:bg-gray-700 dark:border-gray-600"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="Enter your email"
                 autoComplete="email"
@@ -75,7 +78,7 @@ export default function ForgotPasswordPage() {
         {/* Right: Info Panel */}
         <div className="hidden md:flex flex-col justify-center items-center flex-1 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-gray-900 dark:to-gray-800 p-10">
           <div className="flex flex-col items-center">
-            <img src="/logo.png" alt="PREDOC Logo" className="w-16 h-16 mb-4" />
+            <Image src="/logo.png" alt="Logo" width={100} height={100} />
             <span className="font-bold text-2xl text-blue-700 dark:text-blue-400 mb-2">
               PREDOC
             </span>
