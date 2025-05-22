@@ -1,0 +1,92 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       Int                      @id @default(autoincrement())
+  name                     String
+  email                    String                   @unique
+  passwordHash             String
+  role                     Role
+  createdAt                DateTime                 @default(now())
+  medicalRecords           MedicalRecord[]          @relation("UserRecords")
+  treatmentRecommendations TreatmentRecommendation[] @relation("DoctorRecommendations")
+}
+
+model Patient {
+  id               Int              @id @default(autoincrement())
+  fullName         String
+  age              Int
+  gender           Gender
+  weight           Float          
+  region           String?
+  pregnantStatus   PregnantStatus?
+  g6pdDeficiency   Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  medicalRecords   MedicalRecord[]
+}
+
+model MedicalRecord {
+  id                 Int             @id @default(autoincrement())
+  patientId          Int
+  userId             Int?            // Nurse or Doctor who handled the record
+  symptoms           String[]        // PostgreSQL native TEXT[]
+  previousMedications String?
+  createdAt          DateTime        @default(now())
+
+  patient            Patient         @relation(fields: [patientId], references: [id])
+  user               User?           @relation("UserRecords", fields: [userId], references: [id])
+  predictionResult   PredictionResult?
+}
+
+model PredictionResult {
+  id                       Int                     @id @default(autoincrement())
+  medicalRecordId          Int                     @unique
+  predictedDisease         String
+  createdAt                DateTime                @default(now())
+  
+  medicalRecord            MedicalRecord           @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
+  treatmentRecommendation  TreatmentRecommendation?
+}
+
+model TreatmentRecommendation {
+  id                   Int       @id @default(autoincrement())
+  predictionResultId    Int       @unique
+  doctorId             Int?
+  recommendedTreatment  String
+  notes                String?
+  createdAt            DateTime  @default(now())
+
+  predictionResult     PredictionResult @relation(fields: [predictionResultId], references: [id])
+  doctor               User?           @relation("DoctorRecommendations", fields: [doctorId], references: [id])
+}
+
+enum Role {
+  doctor
+  nurse
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum PregnantStatus {
+  not_pregnant
+  first_trimester
+  second
+  third
+}
+
+enum Disease {
+  malaria
+  dengue
+  typhoid
+}
