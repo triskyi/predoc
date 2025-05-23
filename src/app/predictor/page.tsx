@@ -201,7 +201,7 @@ export default function PredictorPage() {
       return;
     }
     // Fetch user profile using session.user.id or session.user.email
-    const userId = session.user.id ?? session.user.email;
+    const userId = session.user.email;
     if (
       userId !== undefined &&
       userId !== null &&
@@ -218,13 +218,25 @@ export default function PredictorPage() {
       try {
         const [patientsRes, recordsRes, analyticsRes] = await Promise.all([
           fetch("/api/patients", {
-            headers: { Authorization: `Bearer ${session?.accessToken}` },
+            headers: {
+              Authorization: `Bearer ${
+                (session?.user as { accessToken?: string })?.accessToken ?? ""
+              }`,
+            },
           }),
           fetch("/api/records", {
-            headers: { Authorization: `Bearer ${session?.accessToken}` },
+            headers: {
+              Authorization: `Bearer ${
+                (session?.user as { accessToken?: string })?.accessToken ?? ""
+              }`,
+            },
           }),
           fetch("/api/analytics", {
-            headers: { Authorization: `Bearer ${session?.accessToken}` },
+            headers: {
+              Authorization: `Bearer ${
+                (session?.user as { accessToken?: string })?.accessToken ?? ""
+              }`,
+            },
           }),
         ]);
 
@@ -260,7 +272,9 @@ export default function PredictorPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.accessToken}`,
+          Authorization: `Bearer ${
+            (session?.user as { accessToken?: string })?.accessToken ?? ""
+          }`,
         },
         body: JSON.stringify({
           fullName: newPatient.fullName,
@@ -362,7 +376,9 @@ export default function PredictorPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.accessToken}`,
+          Authorization: `Bearer ${
+            (session?.user as { accessToken?: string })?.accessToken ?? ""
+          }`,
         },
         body: JSON.stringify({
           patientId: Number(patientId),

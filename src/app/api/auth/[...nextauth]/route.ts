@@ -1,32 +1,33 @@
-import NextAuth, { DefaultUser } from "next-auth";
+import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import prisma from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcrypt";
+
 
 declare module "next-auth" {
-  interface User extends DefaultUser {
-    role?: string;
-    accessToken?: string;
-  }
   interface Session {
     user: {
-      id: string;
-      role?: string;
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      role?: string | null;
     };
-    accessToken?: string;
+  }
+  interface User {
+    role?: string | null;
   }
 }
 
-declare module "next-auth/jwt" {
-  interface JWT {
-    id?: string;
-    role?: string;
-    accessToken?: string;
+declare module "next-auth/adapters" {
+  interface AdapterUser {
+    role?: string | null;
   }
 }
+
+const prisma = new PrismaClient();
+
+// This is your single NextAuth handler for all users (admin, doctor, nurse, etc.)
+// Make sure you have deleted any duplicate or conflicting auth files/routes.
 
 const handler = NextAuth({
   providers: [
@@ -44,41 +45,35 @@ const handler = NextAuth({
         if (!user) return null;
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
-        // You can generate a real JWT or use a random string as a demo token
-        const accessToken = `${user.id}-${Date.now()}`; // Replace with real token logic if needed
+        // Do NOT restrict by role here!
         return {
           id: user.id.toString(),
           name: user.name,
           email: user.email,
           role: user.role,
-          accessToken,
         };
       },
     }),
   ],
-  session: {
-    strategy: "jwt",
-  },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = user.role;
-        token.accessToken = user.accessToken; // Add accessToken to JWT
-      }
-      return token;
-    },
     async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id ?? "";
-        session.user.role = token.role;
-        session.accessToken = token.accessToken; // Add accessToken to session
+      if (session?.user) {
+        session.user.role = typeof token.role === "string" ? token.role : null;
       }
       return session;
     },
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role;
+      }
+      return token;
+    },
   },
   pages: {
-    signIn: "/login",
+    signIn: "/admin/login",
+  },
+  session: {
+    strategy: "jwt",
   },
 });
 

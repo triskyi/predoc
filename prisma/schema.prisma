@@ -70,6 +70,7 @@ model TreatmentRecommendation {
 enum Role {
   doctor
   nurse
+  admin
 }
 
 enum Gender {

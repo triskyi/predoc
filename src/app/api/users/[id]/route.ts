@@ -1,43 +1,30 @@
-import prisma from "@/lib/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const id = params.id;
-  const userId = Number(id);
+  const idOrEmail = params.id;
 
-  if (!userId || isNaN(userId)) {
-    return NextResponse.json({ error: "Invalid user ID" }, { status: 400 });
+  let user;
+  if (/^\d+$/.test(idOrEmail)) {
+    // Numeric ID
+    user = await prisma.user.findUnique({
+      where: { id: Number(idOrEmail) },
+    });
+  } else {
+    // Assume email
+    user = await prisma.user.findUnique({
+      where: { email: idOrEmail },
+    });
   }
 
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      name: user.name,
-      email: user.email,
-      username: user.email.split("@")[0],
-      phone: "",
-      bio: "",
-      photo: "/avatar.png",
-      role: user.role,
-    });
-  } catch (error) {
-    console.error("Error fetching user:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  if (!user) {
+    return new Response(JSON.stringify({ error: "User not found" }), { status: 404 });
   }
+
+  return new Response(JSON.stringify(user), { status: 200 });
 }
