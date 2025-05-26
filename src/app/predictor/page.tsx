@@ -825,28 +825,15 @@ export default function PredictorPage() {
                           Predictions Made
                         </div>
                       </div>
+                      {/* Replace Record Comparison with Most Common Disease */}
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
-                        <Package className="text-orange-500 mb-2" size={28} />
+                        <Activity className="text-pink-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
-                          {
-                            records.filter(
-                              (r) =>
-                                typeof r.predictionResult
-                                  ?.treatmentRecommendation === "object" &&
-                                r.predictionResult?.treatmentRecommendation !==
-                                  null &&
-                                "recommendedTreatment" in
-                                  r.predictionResult.treatmentRecommendation &&
-                                (
-                                  r.predictionResult
-                                    .treatmentRecommendation as {
-                                    recommendedTreatment?: string;
-                                  }
-                                ).recommendedTreatment
-                            ).length
-                          }
+                          {mostPredictedDisease ? mostPredictedDisease.name : "No data"}
                         </div>
-                        <div className="text-gray-500 text-sm">Treatments</div>
+                        <div className="text-gray-500 text-sm">
+                          Most Common Disease
+                        </div>
                       </div>
                     </div>
 
