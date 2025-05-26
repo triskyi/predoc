@@ -76,11 +76,6 @@ export default function Home() {
             </Button>
           </motion.div>
         </motion.div>
-        <div className="absolute bottom-0 left-0 right-0 flex justify-center pb-4 z-10">
-          <span className="inline-block px-4 py-1 rounded-full bg-[#0f172a]/80 text-cyan-200 font-semibold shadow border border-cyan-400">
-            Trusted by clinics & professionals across Africa
-          </span>
-        </div>
       </section>
 
       {/* Features Section */}
