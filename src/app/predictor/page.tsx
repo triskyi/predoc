@@ -341,14 +341,7 @@ export default function PredictorPage() {
     }
   };
 
-  // Get current user id/email for filtering
-  const currentUserId = session?.user?.email;
-
-  // Filter patients and records to only those created by the current user
-  const myPatients = patients.filter((p) => p.userId === currentUserId);
-  const myRecords = records.filter((r) => r.userId === currentUserId);
-
-  const filteredPatients = myPatients.filter(
+  const filteredPatients = patients.filter(
     (p) =>
       p.fullName.toLowerCase().includes(search.toLowerCase()) ||
       p.country?.toLowerCase().includes(search.toLowerCase())
@@ -534,9 +527,9 @@ export default function PredictorPage() {
 
   const COLORS = ["#34d399", "#60a5fa", "#fbbf24", "#f87171", "#a78bfa"];
   const diseaseData =
-    myRecords.length > 0
+    records.length > 0
       ? Object.entries(
-          myRecords.reduce((acc, r) => {
+          records.reduce((acc, r) => {
             const d = r.predictionResult?.predictedDisease || "Unknown";
             acc[d] = (acc[d] || 0) + 1;
             return acc;
@@ -554,7 +547,7 @@ export default function PredictorPage() {
 
   const cityDiseaseCount: Record<string, number> = {};
   if (mostPredictedDisease) {
-    myRecords.forEach((r) => {
+    records.forEach((r) => {
       if (r.predictionResult?.predictedDisease === mostPredictedDisease.name) {
         const patient = patients.find((p) => p.id === r.patientId);
         const city =
@@ -568,7 +561,7 @@ export default function PredictorPage() {
 
   const lineData = (() => {
     const dateCounts: Record<string, number> = {};
-    myRecords.forEach((r) => {
+    records.forEach((r) => {
       const date = new Date(r.createdAt).toLocaleDateString();
       dateCounts[date] = (dateCounts[date] || 0) + 1;
     });
@@ -632,7 +625,7 @@ export default function PredictorPage() {
     const filteredPatientIds = new Set(filteredPatients.map((p) => p.id));
 
     const diseaseDistrictMap: Record<string, Record<string, number>> = {};
-    myRecords.forEach((r) => {
+    records.forEach((r) => {
       const disease = r.predictionResult?.predictedDisease || "Unknown";
       if (!filteredPatientIds.has(r.patientId)) return;
       const patient = patients.find((p) => p.id === r.patientId);
@@ -805,7 +798,7 @@ export default function PredictorPage() {
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
                         <Users className="text-blue-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
-                          {myPatients.length}
+                          {patients.length}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Total Patients
@@ -814,7 +807,7 @@ export default function PredictorPage() {
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
                         <FileText className="text-purple-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
-                          {myRecords.length}
+                          {records.length}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Medical Records
@@ -826,7 +819,7 @@ export default function PredictorPage() {
                           size={28}
                         />
                         <div className="text-2xl font-bold">
-                          {myRecords.filter((r) => r.predictionResult).length}
+                          {records.filter((r) => r.predictionResult).length}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Predictions Made
@@ -836,7 +829,9 @@ export default function PredictorPage() {
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
                         <Activity className="text-pink-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
-                          {mostPredictedDisease ? mostPredictedDisease.name : "No data"}
+                          {mostPredictedDisease
+                            ? mostPredictedDisease.name
+                            : "No data"}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Most Common Disease
@@ -935,6 +930,130 @@ export default function PredictorPage() {
                           </div>
                         </Card>
                       </div>
+
+                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 lg:col-span-1">
+                        <div className="flex items-center gap-2 mb-4">
+                          <LineChartIcon className="text-pink-500" />
+                          <h3 className="text-lg font-semibold">
+                            Record Comparison
+                          </h3>
+                        </div>
+                        <div className="flex flex-wrap gap-4 mb-4">
+                          <div>
+                            <label className="block text-xs mb-1">
+                              Country
+                            </label>
+                            <select
+                              className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                              value={filter.country}
+                              onChange={(e) =>
+                                setFilter((f) => ({
+                                  ...f,
+                                  country: e.target.value,
+                                  district: "",
+                                }))
+                              }
+                            >
+                              <option value="">All</option>
+                              {allCountries.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs mb-1">
+                              District
+                            </label>
+                            <select
+                              className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                              value={filter.district}
+                              onChange={(e) =>
+                                setFilter((f) => ({
+                                  ...f,
+                                  district: e.target.value,
+                                }))
+                              }
+                              disabled={!filter.country}
+                            >
+                              <option value="">All</option>
+                              {allDistricts.map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs mb-1">
+                              Disease
+                            </label>
+                            <select
+                              className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                              value={filter.disease}
+                              onChange={(e) =>
+                                setFilter((f) => ({
+                                  ...f,
+                                  disease: e.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">All</option>
+                              {allDiseases.map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        {allDiseaseBarData.length === 0 ? (
+                          <div className="text-center text-gray-400">
+                            No data available
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {allDiseaseBarData
+                              .filter(
+                                (d) =>
+                                  !filter.disease ||
+                                  d.disease === filter.disease
+                              )
+                              .map((diseaseBar) => (
+                                <div key={diseaseBar.disease}>
+                                  <div className="font-semibold text-pink-700 dark:text-pink-300 mb-2">
+                                    Cities with &quot;{diseaseBar.disease}&quot;
+                                    cases:
+                                  </div>
+                                  <ResponsiveContainer
+                                    width="100%"
+                                    height={200}
+                                  >
+                                    <BarChart data={diseaseBar.data}>
+                                      <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#CBD5E0"
+                                      />
+                                      <XAxis dataKey="category" />
+                                      <YAxis />
+                                      <Tooltip />
+                                      <Legend />
+                                      <Bar dataKey="value" fill="#F687B3" />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                  <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+                                    {diseaseBar.data.map((d) => (
+                                      <div key={d.category}>
+                                        {d.category}: {d.value}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </Card>
                     </div>
                   </>
                 )}
@@ -994,7 +1113,7 @@ export default function PredictorPage() {
                                 className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                                 onClick={() => setShowAddRecord(p.id)}
                               >
-                                <FileText size={16} /> + Record
+                                <FileText size={16} /> + Predict
                               </Button>
                               <Button
                                 className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-green-400 to-green-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
@@ -1093,6 +1212,7 @@ export default function PredictorPage() {
                           </div>
                         )}
                         <div>
+                          <label className="block mb-1">Country</label>
                           <input
                             type="number"
                             min={1}
@@ -1178,7 +1298,7 @@ export default function PredictorPage() {
                             Cancel
                           </Button>
                           <Button
-                            className="bg-blue-600 text-white hover:bg-blue-700"
+                            className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
                             type="submit"
                           >
                             Add Patient
@@ -1355,7 +1475,7 @@ export default function PredictorPage() {
                             </>
                           );
                         }
-                        const patientRecords = myRecords.filter(
+                        const patientRecords = records.filter(
                           (r) => r.patientId === patient.id
                         );
 
@@ -1692,7 +1812,7 @@ export default function PredictorPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {myRecords.map((r, i) => (
+                            {records.map((r, i) => (
                               <tr
                                 key={r.id}
                                 className={`transition-colors duration-200 border-b-2 border-blue-100 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer ${

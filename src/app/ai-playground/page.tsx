@@ -256,7 +256,7 @@ export default function AIPlaygroundPage() {
             href="/predictor"
             className="px-4 py-2 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 text-white font-semibold shadow hover:from-blue-600 hover:to-purple-600 transition-all"
           >
-            Back to Dashboard
+            Go to Dashboard
           </Link>
         </div>
         <h1 className="text-3xl font-bold text-center mb-2 flex items-center justify-center gap-2">
