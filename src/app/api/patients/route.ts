@@ -16,7 +16,8 @@ export async function POST(req: Request) {
       age,
       gender,
       weight,
-      region,
+      country,
+      district,
       pregnantStatus,
       g6pdDeficiency,
     } = body;
@@ -26,7 +27,8 @@ export async function POST(req: Request) {
       !age ||
       !gender ||
       !weight ||
-      !region
+      !country ||
+      !district
     ) {
       return NextResponse.json(
         { error: "Missing required fields" },
@@ -40,7 +42,8 @@ export async function POST(req: Request) {
         age: Number(age),
         gender,
         weight: Number(weight),
-        region,
+        country, // <-- add this line to save country
+        district,
         pregnantStatus: gender === "female" ? pregnantStatus : null,
         g6pdDeficiency: !!g6pdDeficiency,
       },

@@ -5,8 +5,7 @@ export async function GET(
   req: Request,
   context: { params: { id: string } }
 ) {
-  const { params } = await context; // <-- await context
-  const id = Number(params.id);
+  const id = Number(context.params.id);
   if (!id) {
     return NextResponse.json({ error: "Invalid patient ID" }, { status: 400 });
   }
@@ -16,7 +15,8 @@ export async function GET(
       age: true,
       gender: true,
       weight: true,
-      region: true,
+      country: true,
+      district: true,
       pregnantStatus: true,
       g6pdDeficiency: true,
     },

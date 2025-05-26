@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
 
+const API_KEY = "deb9ca885b20dde870c6bc98df473c298d3caf80e63202d6";
+
 const SYMPTOMS = [
   "fever",
   "chills",
@@ -31,20 +33,50 @@ const SYMPTOMS = [
   "delirium",
 ];
 
-const REGIONS = [
-  "Central America west of Panama",
-  "Haiti",
-  "Dominican Republic",
-  "Sub-Saharan Africa",
-  "Papua New Guinea",
-  "Southeast Asia",
+const PREVIOUS_MEDICATIONS = [
+  "None",
+  "Paracetamol",
+  "Ibuprofen",
+  "Aspirin",
+  "Amoxicillin",
+  "Artemether-Lumefantrine",
+  "Ciprofloxacin",
+  "Cetirizine",
 ];
+
+const COUNTRIES: Record<string, string[]> = {
+  Rwanda: [
+    "Kigali",
+    "Huye",
+    "Muhanga",
+    "Nyagatare",
+    "Rubavu",
+    "Musanze",
+    "Gicumbi",
+    "Rwamagana",
+    "Bugesera",
+    "Rusizi",
+  ],
+  Uganda: [
+    "Kampala",
+    "Gulu",
+    "Lira",
+    "Mbarara",
+    "Jinja",
+    "Mbale",
+    "Masaka",
+    "Arua",
+    "Hoima",
+    "Fort Portal",
+  ],
+};
 
 export default function AIPlaygroundPage() {
   const [form, setForm] = useState({
     Age: "",
     Weight: "",
-    Region: "",
+    Country: "",
+    District: "",
     Gender: "",
     Pregnant: false,
     First_Trimester_Pregnant: false,
@@ -139,8 +171,12 @@ export default function AIPlaygroundPage() {
       setError("Weight must be between 1 and 200 kg.");
       return;
     }
-    if (!form.Region) {
-      setError("Please select a region.");
+    if (!form.Country) {
+      setError("Please select a country.");
+      return;
+    }
+    if (!form.District) {
+      setError("Please select a district.");
       return;
     }
     if (!form.Gender) {
@@ -161,20 +197,30 @@ export default function AIPlaygroundPage() {
     SYMPTOMS.forEach((s) => (data[s] = form.symptoms[s] ? 1 : 0));
     data.Age = +form.Age;
     data.Weight = +form.Weight;
-    data.Region = form.Region;
+    data.Country = form.Country;
+    data.District = form.District;
     data.Gender = form.Gender;
     data.Pregnant = form.Pregnant ? 1 : 0;
     data.First_Trimester_Pregnant = form.First_Trimester_Pregnant ? 1 : 0;
     data.G6PD_Deficiency = form.G6PD_Deficiency ? 1 : 0;
-    data.Previous_Medications = form.Previous_Medications || "None";
+    // If user chooses "None", hardcode to "Paracetamol"
+    let prevMed = form.Previous_Medications;
+    if (prevMed === "None") prevMed = "Paracetamol";
+    data.Previous_Medications = prevMed || "Paracetamol";
 
     setLoading(true);
     try {
-      const predictRes = await fetch("http://localhost:5000/predict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const predictRes = await fetch(
+        "https://predoc-api-2.onrender.com/predict",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY,
+          },
+          body: JSON.stringify(data),
+        }
+      );
       const predictResult = await predictRes.json();
 
       if (!predictRes.ok) {
@@ -276,23 +322,56 @@ export default function AIPlaygroundPage() {
               />
             </div>
             <div>
-              <label className="block font-semibold mb-1" htmlFor="Region">
-                Region
+              <label className="block font-semibold mb-1" htmlFor="Country">
+                Country
               </label>
               <select
-                id="Region"
-                name="Region"
+                id="Country"
+                name="Country"
                 required
-                value={form.Region}
-                onChange={handleChange}
+                value={form.Country}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    Country: e.target.value,
+                    District: "",
+                  }))
+                }
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-800"
               >
-                <option value="">Select</option>
-                {REGIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
+                <option value="">Select Country</option>
+                {Object.keys(COUNTRIES).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
                   </option>
                 ))}
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold mb-1" htmlFor="District">
+                District
+              </label>
+              <select
+                id="District"
+                name="District"
+                required
+                value={form.District}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    District: e.target.value,
+                  }))
+                }
+                disabled={!form.Country}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-800"
+              >
+                <option value="">Select District</option>
+                {form.Country &&
+                  COUNTRIES[form.Country].map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
@@ -353,23 +432,28 @@ export default function AIPlaygroundPage() {
                 G6PD Deficiency
               </label>
             </div>
-            <div className="col-span-2">
-              <label
-                className="block font-semibold mb-1"
-                htmlFor="Previous_Medications"
-              >
-                Previous Medications
-              </label>
-              <input
-                type="text"
-                id="Previous_Medications"
-                name="Previous_Medications"
-                placeholder="e.g., None, Quinine, Aspirin"
-                value={form.Previous_Medications}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-800"
-              />
-            </div>
+          </div>
+          <div className="col-span-2">
+            <label
+              className="block font-semibold mb-1"
+              htmlFor="Previous_Medications"
+            >
+              Previous Medications
+            </label>
+            <select
+              id="Previous_Medications"
+              name="Previous_Medications"
+              value={form.Previous_Medications}
+              onChange={handleChange}
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-700 p-2 bg-gray-50 dark:bg-gray-800"
+            >
+              <option value="">Select Medication</option>
+              {PREVIOUS_MEDICATIONS.map((med) => (
+                <option key={med} value={med}>
+                  {med}
+                </option>
+              ))}
+            </select>
           </div>
           <Button
             type="submit"

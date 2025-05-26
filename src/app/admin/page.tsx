@@ -12,8 +12,8 @@ import {
   Trash2,
   UserPlus,
   FilePlus,
-  BarChart,
   Stethoscope,
+  Bell,
 } from "lucide-react";
 import {
   LineChart,
@@ -58,7 +58,7 @@ function SkeletonSidebar() {
       </div>
       <nav className="flex-1 px-4 py-6">
         <ul className="space-y-2">
-          {[...Array(6)].map((_, idx) => (
+          {[...Array(5)].map((_, idx) => (
             <li key={idx}>
               <div className="flex items-center w-full px-4 py-2 rounded-lg">
                 <div className="h-5 w-5 bg-[#232b47] rounded" />
@@ -205,8 +205,15 @@ export default function AdminDashboardPage() {
   const [showUsers, setShowUsers] = useState(false);
   const [showPatients, setShowPatients] = useState(false);
   const [showRecords, setShowRecords] = useState(false);
-  const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPredictor, setShowPredictor] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
+
+  // Settings state
+  const [theme, setTheme] = useState<"light" | "dark" | "scifi">("scifi");
+  const [notifications, setNotifications] = useState({
+    email: true,
+    push: false,
+  });
 
   // Modal states
   const [showAddUserModal, setShowAddUserModal] = useState(false);
@@ -231,7 +238,7 @@ export default function AdminDashboardPage() {
     previousMedications: "",
   });
 
-  // Management/analytics data
+  // Management data
   type User = {
     id?: string;
     name: string;
@@ -262,12 +269,22 @@ export default function AdminDashboardPage() {
     createdAt?: string;
   };
   const [records, setRecords] = useState<Record[]>([]);
-  type GenderDist = { gender: string; count: number };
-  const [genderDist, setGenderDist] = useState<GenderDist[]>([]);
-  type RoleDist = { role: string; count: number };
-  const [roleDist, setRoleDist] = useState<RoleDist[]>([]);
-  type RegionDist = { region: string; count: number };
-  const [regionDist, setRegionDist] = useState<RegionDist[]>([]);
+
+  // Distribution data (hard-coded as provided)
+  const genderDist = [
+    { gender: "Male", count: 0 },
+    { gender: "Female", count: 2 },
+    { gender: "Other", count: 4 },
+  ];
+  const roleDist = [
+    { role: "Doctor", count: 1 },
+    { role: "Nurse", count: 3 },
+    { role: "Admin", count: 0 },
+  ];
+  const regionDist = [
+    { region: "Papua New Guinea", count: 8 },
+    { region: "Southeast Asia", count: 0 },
+  ];
 
   useEffect(() => {
     if (status === "loading") return;
@@ -296,7 +313,7 @@ export default function AdminDashboardPage() {
       .finally(() => setLoading(false));
   }, [session, status, router]);
 
-  // Fetch management/analytics data when toggled
+  // Fetch management data when toggled
   useEffect(() => {
     if (showUsers)
       fetch("/api/admin/users")
@@ -329,25 +346,6 @@ export default function AdminDashboardPage() {
           alert("Failed to load records");
         });
   }, [showRecords]);
-
-  useEffect(() => {
-    if (showAnalytics) {
-      Promise.all([
-        fetch("/api/admin/gender-distribution").then((r) => r.json()),
-        fetch("/api/admin/role-distribution").then((r) => r.json()),
-        fetch("/api/admin/region-distribution").then((r) => r.json()),
-      ])
-        .then(([genderDist, roleDist, regionDist]) => {
-          setGenderDist(genderDist);
-          setRoleDist(roleDist);
-          setRegionDist(regionDist);
-        })
-        .catch((err) => {
-          console.error("Error fetching analytics data:", err);
-          alert("Failed to load analytics data");
-        });
-    }
-  }, [showAnalytics]);
 
   // Compute sidebar counts from loaded stats
   const totalUsers = stats.find((s) => s.label === "Total Users")?.value ?? 0;
@@ -563,11 +561,27 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Settings handlers
+  const handleThemeChange = (newTheme: "light" | "dark" | "scifi") => {
+    setTheme(newTheme);
+    // Apply theme (e.g., update CSS classes or Tailwind config)
+    document.documentElement.classList.remove("light", "dark", "scifi");
+    document.documentElement.classList.add(newTheme);
+  };
+
+  const handleNotificationChange = (
+    type: "email" | "push",
+    enabled: boolean
+  ) => {
+    setNotifications((prev) => ({ ...prev, [type]: enabled }));
+    // Save to backend or local storage
+  };
+
   if (status === "loading" || loading || !session) {
     return (
       <div className={`flex min-h-screen ${scifi.bg}`}>
-        <SkeletonSidebar />
-        <main className="flex-1 p-8 pl-64">
+        {showSidebar && <SkeletonSidebar />}
+        <main className={`flex-1 p-8 ${showSidebar ? "pl-64" : ""}`}>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
             <div>
               <div className="h-8 w-40 bg-[#232b47] rounded mb-2 animate-pulse" />
@@ -600,185 +614,171 @@ export default function AdminDashboardPage() {
   return (
     <div className={`flex min-h-screen ${scifi.bg}`}>
       {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 w-64 h-screen ${scifi.card} flex flex-col z-50`}
-      >
-        <div className="flex items-center gap-2 px-6 py-6 border-b border-[#2e375a]">
-          <Menu className={scifi.accentBlue} />
-          <span className="font-extrabold text-xl text-[#00ffe7] drop-shadow-glow">
-            PREDOC <span className="text-xs font-normal">Admin</span>
-          </span>
-        </div>
-        <nav className="flex-1 px-4 py-6">
-          <ul className="space-y-2">
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  !showUsers &&
-                  !showPatients &&
-                  !showRecords &&
-                  !showAnalytics &&
-                  !showSettings &&
-                  !showPredictor
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#232b47] text-[#b2bfff]"
-                }`}
-                onClick={() => {
-                  setShowUsers(false);
-                  setShowPatients(false);
-                  setShowRecords(false);
-                  setShowAnalytics(false);
-                  setShowSettings(false);
-                  setShowPredictor(false);
-                }}
-              >
-                <BarChart2 size={18} />
-                <span className="ml-2">Dashboard</span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  showUsers
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#232b47] text-[#b2bfff]"
-                }`}
-                onClick={() => {
-                  setShowUsers(true);
-                  setShowPatients(false);
-                  setShowRecords(false);
-                  setShowAnalytics(false);
-                  setShowSettings(false);
-                  setShowPredictor(false);
-                }}
-              >
-                <Users size={18} />
-                <span className="ml-2">User Management</span>
-                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#232b47] text-[#00ffe7]">
-                  {totalUsers}
-                </span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  showPatients
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#1e2a3a] text-[#00ffb8]"
-                }`}
-                onClick={() => {
-                  setShowUsers(false);
-                  setShowPatients(true);
-                  setShowRecords(false);
-                  setShowAnalytics(false);
-                  setShowSettings(false);
-                  setShowPredictor(false);
-                }}
-              >
-                <User size={18} />
-                <span className="ml-2">Patient Management</span>
-                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#1e2a3a] text-[#00ffb8]">
-                  {totalPatients}
-                </span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  showRecords
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#2e2a1e] text-[#ffe156]"
-                }`}
-                onClick={() => {
-                  setShowUsers(false);
-                  setShowPatients(false);
-                  setShowRecords(true);
-                  setShowAnalytics(false);
-                  setShowSettings(false);
-                  setShowPredictor(false);
-                }}
-              >
-                <FileText size={18} />
-                <span className="ml-2">Medical Records</span>
-                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#2e2a1e] text-[#ffe156]">
-                  {totalRecords}
-                </span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  showAnalytics
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#2a1e2e] text-[#a259ff]"
-                }`}
-                onClick={() => {
-                  setShowUsers(false);
-                  setShowPatients(false);
-                  setShowRecords(false);
-                  setShowAnalytics(true);
-                  setShowSettings(false);
-                  setShowPredictor(false);
-                }}
-              >
-                <BarChart size={18} />
-                <span className="ml-2">Analytics & Reports</span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  showPredictor
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#232b47] text-[#b2bfff]"
-                }`}
-                onClick={() => {
-                  setShowUsers(false);
-                  setShowPatients(false);
-                  setShowRecords(false);
-                  setShowAnalytics(false);
-                  setShowSettings(false);
-                  setShowPredictor(true);
-                  router.push("/predictor");
-                }}
-              >
-                <Stethoscope size={18} />
-                <span className="ml-2">Predictor</span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
-                  showSettings
-                    ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
-                    : "hover:bg-[#232b47] text-[#b2bfff]"
-                }`}
-                onClick={() => {
-                  setShowUsers(false);
-                  setShowPatients(false);
-                  setShowRecords(false);
-                  setShowAnalytics(false);
-                  setShowSettings(true);
-                  setShowPredictor(false);
-                }}
-              >
-                <LogOut size={18} />
-                <span className="ml-2">Settings</span>
-              </button>
-            </li>
-          </ul>
-        </nav>
-        <div className="px-4 py-4 border-t border-[#2e375a]">
-          <button
-            className="flex items-center gap-2 text-[#b2bfff] hover:text-[#ff3864] transition"
-            onClick={() => setShowSettings((v) => !v)}
-          >
-            <LogOut size={18} /> Settings
-          </button>
-        </div>
-      </aside>
+      {showSidebar && (
+        <aside
+          className={`fixed top-0 left-0 w-64 h-screen ${scifi.card} flex flex-col z-50 transition-all duration-300`}
+        >
+          <div className="flex items-center gap-2 px-6 py-6 border-b border-[#2e375a]">
+            <Menu className={scifi.accentBlue} />
+            <span className="font-extrabold text-xl text-[#00ffe7] drop-shadow-glow">
+              PREDOC <span className="text-xs font-normal">Admin</span>
+            </span>
+          </div>
+          <nav className="flex-1 px-4 py-6">
+            <ul className="space-y-2">
+              <li>
+                <button
+                  className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
+                    !showUsers &&
+                    !showPatients &&
+                    !showRecords &&
+                    !showSettings &&
+                    !showPredictor
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "hover:bg-[#232b47] text-[#b2bfff]"
+                  }`}
+                  onClick={() => {
+                    setShowUsers(false);
+                    setShowPatients(false);
+                    setShowRecords(false);
+                    setShowSettings(false);
+                    setShowPredictor(false);
+                  }}
+                >
+                  <BarChart2 size={18} />
+                  <span className="ml-2">Dashboard</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
+                    showUsers
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "hover:bg-[#232b47] text-[#b2bfff]"
+                  }`}
+                  onClick={() => {
+                    setShowUsers(true);
+                    setShowPatients(false);
+                    setShowRecords(false);
+                    setShowSettings(false);
+                    setShowPredictor(false);
+                  }}
+                >
+                  <Users size={18} />
+                  <span className="ml-2">User Management</span>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#232b47] text-[#00ffe7]">
+                    {totalUsers}
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
+                    showPatients
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "hover:bg-[#1e2a3a] text-[#00ffb8]"
+                  }`}
+                  onClick={() => {
+                    setShowUsers(false);
+                    setShowPatients(true);
+                    setShowRecords(false);
+                    setShowSettings(false);
+                    setShowPredictor(false);
+                  }}
+                >
+                  <User size={18} />
+                  <span className="ml-2">Patient Management</span>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#1e2a3a] text-[#00ffb8]">
+                    {totalPatients}
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
+                    showRecords
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "hover:bg-[#2e2a1e] text-[#ffe156]"
+                  }`}
+                  onClick={() => {
+                    setShowUsers(false);
+                    setShowPatients(false);
+                    setShowRecords(true);
+                    setShowSettings(false);
+                    setShowPredictor(false);
+                  }}
+                >
+                  <FileText size={18} />
+                  <span className="ml-2">Medical Records</span>
+                  <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-[#2e2a1e] text-[#ffe156]">
+                    {totalRecords}
+                  </span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
+                    showPredictor
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "hover:bg-[#232b47] text-[#b2bfff]"
+                  }`}
+                  onClick={() => {
+                    setShowUsers(false);
+                    setShowPatients(false);
+                    setShowRecords(false);
+                    setShowSettings(false);
+                    setShowPredictor(true);
+                    router.push("/predictor");
+                  }}
+                >
+                  <Stethoscope size={18} />
+                  <span className="ml-2">Predictor</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  className={`flex items-center w-full px-4 py-2 rounded-lg transition ${
+                    showSettings
+                      ? "bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-semibold"
+                      : "hover:bg-[#232b47] text-[#b2bfff]"
+                  }`}
+                  onClick={() => {
+                    setShowUsers(false);
+                    setShowPatients(false);
+                    setShowRecords(false);
+                    setShowSettings(true);
+                    setShowPredictor(false);
+                  }}
+                >
+                  <LogOut size={18} />
+                  <span className="ml-2">Settings</span>
+                </button>
+              </li>
+            </ul>
+          </nav>
+          <div className="px-4 py-4 border-t border-[#2e375a]">
+            <button
+              className="flex items-center gap-2 text-[#b2bfff] hover:text-[#ff3864] transition"
+              onClick={() => setShowSettings(true)}
+            >
+              <LogOut size={18} /> Settings
+            </button>
+          </div>
+        </aside>
+      )}
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-y-auto pl-64">
+      <main
+        className={`flex-1 p-8 ${
+          showSidebar ? "pl-64" : ""
+        } transition-all duration-300`}
+      >
+        {/* Sidebar Toggle Button */}
+        <button
+          className="fixed top-4 left-4 p-2 rounded bg-[#232b47] text-[#00ffe7] hover:bg-[#2e375a] transition z-50"
+          onClick={() => setShowSidebar(!showSidebar)}
+        >
+          <Menu size={24} />
+        </button>
         {/* Export Modal */}
         {showExportModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -844,15 +844,55 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Settings Modal/Section */}
+        {/* Settings Section */}
         {showSettings && (
           <div className={`rounded-xl p-6 shadow-lg mb-8 ${scifi.card}`}>
             <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
-              Settings
+              System Settings
             </h2>
-            <div className="text-[#b2bfff]">
-              <p>System Settings (e.g., theme, notifications)</p>
-              {/* Add more settings controls here */}
+            <div className="space-y-4 text-[#b2bfff]">
+              <div>
+                <label className="text-sm font-semibold">Theme</label>
+                <select
+                  value={theme}
+                  onChange={(e) =>
+                    handleThemeChange(
+                      e.target.value as "light" | "dark" | "scifi"
+                    )
+                  }
+                  className="w-full p-2 bg-[#232b47] border border-[#2e375a] rounded text-[#00ffe7]"
+                >
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="scifi">Sci-Fi</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-semibold flex items-center gap-2">
+                  <Bell size={18} /> Email Notifications
+                  <input
+                    type="checkbox"
+                    checked={notifications.email}
+                    onChange={(e) =>
+                      handleNotificationChange("email", e.target.checked)
+                    }
+                    className="ml-auto"
+                  />
+                </label>
+              </div>
+              <div>
+                <label className="text-sm font-semibold flex items-center gap-2">
+                  <Bell size={18} /> Push Notifications
+                  <input
+                    type="checkbox"
+                    checked={notifications.push}
+                    onChange={(e) =>
+                      handleNotificationChange("push", e.target.checked)
+                    }
+                    className="ml-auto"
+                  />
+                </label>
+              </div>
             </div>
           </div>
         )}
@@ -1321,71 +1361,11 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* Analytics & Reports */}
-        {showAnalytics && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
-              <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
-                Patient Gender Distribution
-              </h2>
-              <ResponsiveContainer width="100%" height={180}>
-                <ReBarChart data={genderDist}>
-                  <XAxis dataKey="gender" stroke="#00ffe7" />
-                  <YAxis stroke="#00ffe7" />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#00ffe7" />
-                </ReBarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
-              <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
-                User Role Distribution
-              </h2>
-              <ResponsiveContainer width="100%" height={180}>
-                <PieChart>
-                  <Pie
-                    data={roleDist}
-                    dataKey="count"
-                    nameKey="role"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={60}
-                    fill="#00ffe7"
-                    label
-                  >
-                    {roleDist.map((entry, idx) => (
-                      <Cell
-                        key={`cell-${idx}`}
-                        fill={["#00ffe7", "#a259ff", "#ffe156"][idx % 3]}
-                      />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
-              <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
-                Patient Region Distribution
-              </h2>
-              <ResponsiveContainer width="100%" height={180}>
-                <ReBarChart data={regionDist}>
-                  <XAxis dataKey="region" stroke="#00ffe7" />
-                  <YAxis stroke="#00ffe7" />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#a259ff" />
-                </ReBarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
         {/* Default Dashboard */}
         {!showSettings &&
           !showUsers &&
           !showPatients &&
           !showRecords &&
-          !showAnalytics &&
           !showPredictor && (
             <>
               <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
@@ -1451,7 +1431,7 @@ export default function AdminDashboardPage() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
                   <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
                     Disease Trends
@@ -1509,6 +1489,79 @@ export default function AdminDashboardPage() {
                       </li>
                     ))}
                   </ul>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
+                  <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
+                    Patient Gender Distribution
+                  </h2>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <ReBarChart data={genderDist}>
+                      <XAxis dataKey="gender" stroke="#00ffe7" />
+                      <YAxis stroke="#00ffe7" />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#181c2f",
+                          border: "1px solid #00ffe7",
+                          color: "#00ffe7",
+                        }}
+                      />
+                      <Bar dataKey="count" fill="#00ffe7" />
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
+                  <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
+                    User Role Distribution
+                  </h2>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie
+                        data={roleDist}
+                        dataKey="count"
+                        nameKey="role"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={60}
+                        fill="#00ffe7"
+                        label
+                      >
+                        {roleDist.map((entry, idx) => (
+                          <Cell
+                            key={`cell-${idx}`}
+                            fill={["#00ffe7", "#a259ff", "#ffe156"][idx % 3]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          background: "#181c2f",
+                          border: "1px solid #00ffe7",
+                          color: "#00ffe7",
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className={`rounded-xl p-6 shadow-lg ${scifi.card}`}>
+                  <h2 className={`text-lg font-bold mb-4 ${scifi.accentBlue}`}>
+                    Patient Region Distribution
+                  </h2>
+                  <ResponsiveContainer width="100%" height={180}>
+                    <ReBarChart data={regionDist}>
+                      <XAxis dataKey="region" stroke="#00ffe7" />
+                      <YAxis stroke="#00ffe7" />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#181c2f",
+                          border: "1px solid #00ffe7",
+                          color: "#00ffe7",
+                        }}
+                      />
+                      <Bar dataKey="count" fill="#a259ff" />
+                    </ReBarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
               <div className={`rounded-xl p-6 shadow-lg mt-8 ${scifi.card}`}>

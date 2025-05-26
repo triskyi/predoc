@@ -9,11 +9,13 @@ datasource db {
 }
 
 model User {
-  id                       Int                      @id @default(autoincrement())
-  name                     String
+  id                       String                    @id @default(uuid())
+  name                     String?
   email                    String                   @unique
   passwordHash             String
-  role                     Role
+  role                     String?
+  bio                      String?
+  photo                    String?
   createdAt                DateTime                 @default(now())
   medicalRecords           MedicalRecord[]          @relation("UserRecords")
   treatmentRecommendations TreatmentRecommendation[] @relation("DoctorRecommendations")
@@ -24,8 +26,9 @@ model Patient {
   fullName         String
   age              Int
   gender           Gender
-  weight           Float          
-  region           String?
+  weight           Float
+  country          String?
+  district         String?
   pregnantStatus   PregnantStatus?
   g6pdDeficiency   Boolean          @default(false)
   createdAt        DateTime         @default(now())
@@ -35,11 +38,10 @@ model Patient {
 model MedicalRecord {
   id                 Int             @id @default(autoincrement())
   patientId          Int
-  userId             Int?            // Nurse or Doctor who handled the record
+  userId             String?         // Changed from Int? to String?
   symptoms           String[]        // PostgreSQL native TEXT[]
   previousMedications String?
   createdAt          DateTime        @default(now())
-
   patient            Patient         @relation(fields: [patientId], references: [id])
   user               User?           @relation("UserRecords", fields: [userId], references: [id])
   predictionResult   PredictionResult?
@@ -50,7 +52,6 @@ model PredictionResult {
   medicalRecordId          Int                     @unique
   predictedDisease         String
   createdAt                DateTime                @default(now())
-  
   medicalRecord            MedicalRecord           @relation(fields: [medicalRecordId], references: [id], onDelete: Cascade)
   treatmentRecommendation  TreatmentRecommendation?
 }
@@ -58,11 +59,10 @@ model PredictionResult {
 model TreatmentRecommendation {
   id                   Int       @id @default(autoincrement())
   predictionResultId    Int       @unique
-  doctorId             Int?
+  doctorId             String?   // Changed from Int? to String?
   recommendedTreatment  String
   notes                String?
   createdAt            DateTime  @default(now())
-
   predictionResult     PredictionResult @relation(fields: [predictionResultId], references: [id])
   doctor               User?           @relation("DoctorRecommendations", fields: [doctorId], references: [id])
 }

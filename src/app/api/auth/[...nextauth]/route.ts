@@ -26,10 +26,8 @@ declare module "next-auth/adapters" {
 
 const prisma = new PrismaClient();
 
-// This is your single NextAuth handler for all users (admin, doctor, nurse, etc.)
-// Make sure you have deleted any duplicate or conflicting auth files/routes.
-
-const handler = NextAuth({
+// Export authOptions for use in API routes
+export const authOptions = {
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -45,7 +43,6 @@ const handler = NextAuth({
         if (!user) return null;
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
-        // Do NOT restrict by role here!
         return {
           id: user.id.toString(),
           name: user.name,
@@ -56,13 +53,13 @@ const handler = NextAuth({
     }),
   ],
   callbacks: {
-    async session({ session, token }) {
+    async session({ session, token }: { session: import("next-auth").Session; token: import("next-auth/jwt").JWT }) {
       if (session?.user) {
         session.user.role = typeof token.role === "string" ? token.role : null;
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: import("next-auth/jwt").JWT; user?: import("next-auth").User }) {
       if (user) {
         token.role = user.role;
       }
@@ -73,8 +70,11 @@ const handler = NextAuth({
     signIn: "/admin/login",
   },
   session: {
-    strategy: "jwt",
+    strategy: "jwt" as const,
   },
-});
+};
+
+// NextAuth handler
+const handler = NextAuth(authOptions);
 
 export { handler as GET, handler as POST };

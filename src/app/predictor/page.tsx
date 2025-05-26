@@ -42,6 +42,8 @@ import {
   Bar,
 } from "recharts";
 
+const API_KEY = "deb9ca885b20dde870c6bc98df473c298d3caf80e63202d6";
+
 const symptoms = [
   "fever",
   "chills",
@@ -66,12 +68,43 @@ const symptoms = [
   "constipation",
   "delirium",
 ];
-const regions = [
-  "Sub-Saharan Africa",
-  "Dominican Republic",
-  "Papua New Guinea",
-  "Southeast Asia",
-  "Central America west of Panama",
+
+const countries: Record<string, string[]> = {
+  Rwanda: [
+    "Kigali",
+    "Huye",
+    "Muhanga",
+    "Nyagatare",
+    "Rubavu",
+    "Musanze",
+    "Gicumbi",
+    "Rwamagana",
+    "Bugesera",
+    "Rusizi",
+  ],
+  Uganda: [
+    "Kampala",
+    "Gulu",
+    "Lira",
+    "Mbarara",
+    "Jinja",
+    "Mbale",
+    "Masaka",
+    "Arua",
+    "Hoima",
+    "Fort Portal",
+  ],
+};
+
+const previous_medications = [
+  "None",
+  "Paracetamol",
+  "Ibuprofen",
+  "Aspirin",
+  "Amoxicillin",
+  "Artemether-Lumefantrine",
+  "Ciprofloxacin",
+  "Cetirizine",
 ];
 
 export default function PredictorPage() {
@@ -91,7 +124,8 @@ export default function PredictorPage() {
     age: number;
     gender: string;
     weight: number;
-    region?: string;
+    country?: string;
+    district?: string;
     pregnantStatus?: string;
     g6pdDeficiency?: boolean;
     [key: string]: string | number | boolean | undefined;
@@ -176,7 +210,8 @@ export default function PredictorPage() {
     age: "",
     gender: "",
     weight: "",
-    region: "",
+    country: "",
+    district: "",
     pregnantStatus: "",
     g6pdDeficiency: false,
   });
@@ -186,7 +221,7 @@ export default function PredictorPage() {
       const res = await fetch(`/api/users/${userId}`);
       if (!res.ok) throw new Error("Failed to fetch user profile");
       const profile = await res.json();
-      setProfile(profile); // assuming you have setProfile in your state
+      setProfile(profile);
     } catch (error) {
       console.error("Error fetching user profile:", error);
     }
@@ -195,24 +230,18 @@ export default function PredictorPage() {
   const lastFetchedUserId = useRef<string | number | null>(null);
 
   useEffect(() => {
-    if (status === "loading") return; // Wait for session to load
+    if (status === "loading") return;
     if (!session) {
       router.replace("/login");
       return;
     }
-    // Fetch user profile using session.user.id or session.user.email
-    const userId = session.user.email;
-    if (
-      userId !== undefined &&
-      userId !== null &&
-      userId !== lastFetchedUserId.current
-    ) {
+    const userId = session.user.email ?? "";
+    if (userId !== lastFetchedUserId.current) {
       lastFetchedUserId.current = userId;
       fetchUserProfile(userId);
     }
   }, [session, status, router]);
 
-  // Fetch data on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -264,7 +293,7 @@ export default function PredictorPage() {
   }, [session]);
 
   const [selectedRecord, setSelectedRecord] = useState<RecordType | null>(null);
-  // API handlers
+
   const handleAddPatient = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
@@ -272,6 +301,7 @@ export default function PredictorPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-api-key": API_KEY,
           Authorization: `Bearer ${
             (session?.user as { accessToken?: string })?.accessToken ?? ""
           }`,
@@ -281,11 +311,12 @@ export default function PredictorPage() {
           age: Number(newPatient.age),
           gender: newPatient.gender,
           weight: Number(newPatient.weight),
-          region: newPatient.region,
+          country: newPatient.country,
+          district: newPatient.district,
           pregnantStatus:
             newPatient.gender === "female" && newPatient.pregnantStatus
               ? newPatient.pregnantStatus
-              : null, // <-- Only send a valid enum or null
+              : null,
           g6pdDeficiency: newPatient.g6pdDeficiency,
         }),
       });
@@ -298,7 +329,8 @@ export default function PredictorPage() {
           age: "",
           gender: "",
           weight: "",
-          region: "",
+          country: "",
+          district: "",
           pregnantStatus: "",
           g6pdDeficiency: false,
         });
@@ -312,10 +344,9 @@ export default function PredictorPage() {
   const filteredPatients = patients.filter(
     (p) =>
       p.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      p.region?.toLowerCase().includes(search.toLowerCase())
+      p.country?.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Profile handlers
   const handleProfileChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -335,47 +366,70 @@ export default function PredictorPage() {
   const handleAddRecord = async (e: React.FormEvent, patientId: string) => {
     e.preventDefault();
     try {
-      const patientRes = await fetch(`/api/patients/${patientId}`);
+      const patientRes = await fetch(`/api/patients/${patientId}`, {
+        headers: {
+          "x-api-key": API_KEY,
+        },
+      });
       if (!patientRes.ok) throw new Error("Failed to fetch patient info");
       const patient = await patientRes.json();
 
-      const data = {
-        ...recordForm.symptoms.reduce((acc, s) => ({ ...acc, [s]: 1 }), {}),
-        Age: patient.age,
-        Weight: patient.weight,
-        Region: patient.region,
-        Gender: patient.gender === "male" ? "Male" : "Female",
-        Pregnant:
-          patient.pregnantStatus === "first_trimester" ||
-          patient.pregnantStatus === "second" ||
-          patient.pregnantStatus === "third"
-            ? 1
-            : 0,
-        First_Trimester_Pregnant:
-          patient.pregnantStatus === "first_trimester" ? 1 : 0,
-        G6PD_Deficiency: patient.g6pdDeficiency ? 1 : 0,
-        Previous_Medications: recordForm.previousMedications || "",
-      };
+      let prevMed = recordForm.previousMedications;
+      if (prevMed === "None") prevMed = "Paracetamol";
 
-      const predictRes = await fetch("http://localhost:5000/predict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      const data: Record<string, string | number> = {};
+      symptomsList.forEach(
+        (s) => (data[s] = recordForm.symptoms.includes(s) ? 1 : 0)
+      );
+      data.Age = patient.age;
+      data.Weight = patient.weight;
+      data.Country = patient.country;
+      data.District = patient.district;
+      data.Gender =
+        patient.gender === "male"
+          ? "Male"
+          : patient.gender === "female"
+          ? "Female"
+          : patient.gender;
+      data.Pregnant =
+        patient.pregnantStatus === "first_trimester" ||
+        patient.pregnantStatus === "second" ||
+        patient.pregnantStatus === "third"
+          ? 1
+          : 0;
+      data.First_Trimester_Pregnant =
+        patient.pregnantStatus === "first_trimester" ? 1 : 0;
+      data.G6PD_Deficiency = patient.g6pdDeficiency ? 1 : 0;
+      data.Previous_Medications = prevMed || "Paracetamol";
+
+      const predictRes = await fetch(
+        "https://predoc-api-2.onrender.com/predict",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": API_KEY,
+          },
+          body: JSON.stringify(data),
+        }
+      );
       const predictResult = await predictRes.json();
 
       if (!predictRes.ok) {
         alert(predictResult.error || "Prediction failed");
         return;
       }
-      const treatment = predictResult.prediction.treatment;
-      const { drug, ...rest } = treatment;
-      const notes = JSON.stringify(rest, null, 2);
+      const treatment = predictResult.prediction?.treatment;
+      const drug = treatment?.drug || "";
+      const notes = treatment
+        ? JSON.stringify({ ...treatment, drug: undefined }, null, 2)
+        : "";
 
       const saveRes = await fetch("/api/records", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-api-key": API_KEY,
           Authorization: `Bearer ${
             (session?.user as { accessToken?: string })?.accessToken ?? ""
           }`,
@@ -383,8 +437,8 @@ export default function PredictorPage() {
         body: JSON.stringify({
           patientId: Number(patientId),
           symptoms: recordForm.symptoms,
-          previousMedications: recordForm.previousMedications,
-          predictedDisease: predictResult.prediction.disease,
+          previousMedications: prevMed,
+          predictedDisease: predictResult.prediction?.disease,
           recommendedTreatment: drug,
           notes,
         }),
@@ -399,7 +453,7 @@ export default function PredictorPage() {
       setRecordForm({ patientId: "", symptoms: [], previousMedications: "" });
 
       alert("Medical record added and prediction saved!");
-    } catch (err: unknown) {
+    } catch (err) {
       if (err instanceof Error) {
         alert(err.message || "Error adding record");
       } else {
@@ -471,7 +525,6 @@ export default function PredictorPage() {
     return String(obj);
   }
 
-  // Pie chart data for Disease Distribution
   const COLORS = ["#34d399", "#60a5fa", "#fbbf24", "#f87171", "#a78bfa"];
   const diseaseData =
     records.length > 0
@@ -484,30 +537,117 @@ export default function PredictorPage() {
         ).map(([name, value]) => ({ name, value }))
       : [];
 
-  // Line chart data for Records Over Time
-  const recordsOverTime =
-    records.length > 0
-      ? records.reduce((acc, r) => {
-          const date = new Date(r.createdAt).toLocaleDateString();
-          acc[date] = (acc[date] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>)
-      : {};
-  const lineData = Object.entries(recordsOverTime).map(([date, count]) => ({
-    date,
-    count,
-  }));
+  const mostPredictedDisease =
+    diseaseData.length > 0
+      ? diseaseData.reduce(
+          (max, d) => (d.value > max.value ? d : max),
+          diseaseData[0]
+        )
+      : null;
 
-  // Bar chart data for Record Comparison (example: count by region)
-  const barData =
-    patients.length > 0
-      ? regions.map((region) => ({
-          category: region,
-          value: records.filter(
-            (r) => patients.find((p) => p.id === r.patientId)?.region === region
-          ).length,
+  const cityDiseaseCount: Record<string, number> = {};
+  if (mostPredictedDisease) {
+    records.forEach((r) => {
+      if (r.predictionResult?.predictedDisease === mostPredictedDisease.name) {
+        const patient = patients.find((p) => p.id === r.patientId);
+        const city =
+          typeof patient?.district === "string" && patient.district
+            ? patient.district
+            : "Unknown";
+        cityDiseaseCount[city] = (cityDiseaseCount[city] || 0) + 1;
+      }
+    });
+  }
+
+  const lineData = (() => {
+    const dateCounts: Record<string, number> = {};
+    records.forEach((r) => {
+      const date = new Date(r.createdAt).toLocaleDateString();
+      dateCounts[date] = (dateCounts[date] || 0) + 1;
+    });
+    return Object.entries(dateCounts)
+      .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+      .map(([date, count]) => ({ date, count }));
+  })();
+
+  async function handleSaveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      const res = await fetch("/api/users/update-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(profile),
+      });
+      if (!res.ok) {
+        alert("Failed to update profile");
+        return;
+      }
+      const updatedProfile = await res.json();
+      setProfile((prev) => ({ ...prev, ...updatedProfile }));
+      alert("Profile updated successfully!");
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      alert("Error updating profile");
+    }
+  }
+
+  const [filter, setFilter] = useState({
+    country: "",
+    district: "",
+    disease: "",
+  });
+
+  const allCountries = Array.from(
+    new Set(patients.map((p) => p.country).filter(Boolean))
+  ) as string[];
+  const allDistricts = Array.from(
+    new Set(
+      patients
+        .filter((p) => (filter.country ? p.country === filter.country : true))
+        .map((p) => p.district)
+        .filter(Boolean)
+    )
+  ) as string[];
+  const allDiseases = Array.from(
+    new Set(
+      records.map((r) => r.predictionResult?.predictedDisease).filter(Boolean)
+    )
+  ) as string[];
+
+  const allDiseaseBarData = (() => {
+    const filteredPatients = patients.filter((p) => {
+      if (filter.country && p.country !== filter.country) return false;
+      if (filter.district && p.district !== filter.district) return false;
+      return true;
+    });
+    const filteredPatientIds = new Set(filteredPatients.map((p) => p.id));
+
+    const diseaseDistrictMap: Record<string, Record<string, number>> = {};
+    records.forEach((r) => {
+      const disease = r.predictionResult?.predictedDisease || "Unknown";
+      if (!filteredPatientIds.has(r.patientId)) return;
+      const patient = patients.find((p) => p.id === r.patientId);
+      const city =
+        typeof patient?.district === "string" && patient.district
+          ? patient.district
+          : "Unknown";
+      if (!diseaseDistrictMap[disease]) diseaseDistrictMap[disease] = {};
+      diseaseDistrictMap[disease][city] =
+        (diseaseDistrictMap[disease][city] || 0) + 1;
+    });
+
+    return Object.entries(diseaseDistrictMap).map(([disease, cityMap]) => ({
+      disease,
+      data: Object.entries(cityMap)
+        .map(([city, value]) => ({
+          category: city,
+          value,
         }))
-      : [];
+        .sort((a, b) => b.value - a.value),
+    }));
+  })();
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
@@ -602,7 +742,7 @@ export default function PredictorPage() {
               onClick={() => setTab("profile")}
             >
               <Image
-                src={profile.photo}
+                src={profile.photo || "/avatar.png"}
                 alt="User"
                 width={32}
                 height={32}
@@ -711,104 +851,218 @@ export default function PredictorPage() {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-                      {/* Disease Distribution (Pie Chart) */}
-                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <Activity className="text-sky-500" />
-                          <h3 className="text-lg font-semibold">
-                            Disease Distribution
-                          </h3>
-                        </div>
-                        {diseaseData.length === 0 ? (
-                          <div className="text-center text-gray-400">
-                            No data available
+                      <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <Activity className="text-sky-500" />
+                            <h3 className="text-lg font-semibold">
+                              Disease Distribution
+                            </h3>
                           </div>
-                        ) : (
-                          <ResponsiveContainer width="100%" height={240}>
-                            <PieChart>
-                              <Pie
-                                data={diseaseData}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={80}
-                                innerRadius={40}
-                                label
+                          {diseaseData.length === 0 ? (
+                            <div className="text-center text-gray-400">
+                              No data available
+                            </div>
+                          ) : (
+                            <ResponsiveContainer width="100%" height={240}>
+                              <PieChart>
+                                <Pie
+                                  data={diseaseData}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  cx="50%"
+                                  cy="50%"
+                                  outerRadius={80}
+                                  innerRadius={40}
+                                  label
+                                >
+                                  {diseaseData.map((entry, idx) => (
+                                    <Cell
+                                      key={`cell-${idx}`}
+                                      fill={COLORS[idx % COLORS.length]}
+                                    />
+                                  ))}
+                                </Pie>
+                                <Tooltip />
+                              </PieChart>
+                            </ResponsiveContainer>
+                          )}
+                          {diseaseData.length > 0 && (
+                            <div className="mt-4 text-center font-semibold text-blue-700 dark:text-blue-300">
+                              {diseaseData.map((d) => (
+                                <div key={d.name}>
+                                  {d.name}: {d.value}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </Card>
+
+                        <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                          <div className="flex items-center gap-2 mb-4">
+                            <LineChartIcon className="text-yellow-500" />
+                            <h3 className="text-lg font-semibold">
+                              Records Over Time
+                            </h3>
+                          </div>
+                          {lineData.length === 0 ? (
+                            <div className="text-center text-gray-400">
+                              No data available
+                            </div>
+                          ) : (
+                            <ResponsiveContainer width="100%" height={240}>
+                              <LineChart data={lineData}>
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  stroke="#CBD5E0"
+                                />
+                                <XAxis dataKey="date" />
+                                <YAxis />
+                                <Tooltip />
+                                <Legend />
+                                <Line
+                                  type="monotone"
+                                  dataKey="count"
+                                  stroke="#63B3ED"
+                                  strokeWidth={2}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          )}
+                          <div className="mt-4 flex flex-wrap gap-2 justify-center">
+                            {lineData.map((d) => (
+                              <span
+                                key={d.date}
+                                className="inline-block px-3 py-1 rounded bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-xs font-semibold"
                               >
-                                {diseaseData.map((entry, idx) => (
-                                  <Cell
-                                    key={`cell-${idx}`}
-                                    fill={COLORS[idx % COLORS.length]}
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        )}
-                      </Card>
-
-                      {/* Records Over Time (Line Chart) */}
-                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
-                        <div className="flex items-center gap-2 mb-4">
-                          <LineChartIcon className="text-yellow-500" />
-                          <h3 className="text-lg font-semibold">
-                            Records Over Time
-                          </h3>
-                        </div>
-                        {lineData.length === 0 ? (
-                          <div className="text-center text-gray-400">
-                            No data available
+                                {d.date}: {d.count}
+                              </span>
+                            ))}
                           </div>
-                        ) : (
-                          <ResponsiveContainer width="100%" height={240}>
-                            <LineChart data={lineData}>
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="#CBD5E0"
-                              />
-                              <XAxis dataKey="date" />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Line
-                                type="monotone"
-                                dataKey="count"
-                                stroke="#63B3ED"
-                                strokeWidth={2}
-                              />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        )}
-                      </Card>
+                        </Card>
+                      </div>
 
-                      {/* Additional Chart: Records Comparison (Bar Chart) */}
-                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                      <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 lg:col-span-1">
                         <div className="flex items-center gap-2 mb-4">
                           <LineChartIcon className="text-pink-500" />
                           <h3 className="text-lg font-semibold">
                             Record Comparison
                           </h3>
                         </div>
-                        {barData.length === 0 ? (
+                        <div className="flex flex-wrap gap-4 mb-4">
+                          <div>
+                            <label className="block text-xs mb-1">
+                              Country
+                            </label>
+                            <select
+                              className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                              value={filter.country}
+                              onChange={(e) =>
+                                setFilter((f) => ({
+                                  ...f,
+                                  country: e.target.value,
+                                  district: "",
+                                }))
+                              }
+                            >
+                              <option value="">All</option>
+                              {allCountries.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs mb-1">
+                              District
+                            </label>
+                            <select
+                              className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                              value={filter.district}
+                              onChange={(e) =>
+                                setFilter((f) => ({
+                                  ...f,
+                                  district: e.target.value,
+                                }))
+                              }
+                              disabled={!filter.country}
+                            >
+                              <option value="">All</option>
+                              {allDistricts.map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs mb-1">
+                              Disease
+                            </label>
+                            <select
+                              className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                              value={filter.disease}
+                              onChange={(e) =>
+                                setFilter((f) => ({
+                                  ...f,
+                                  disease: e.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">All</option>
+                              {allDiseases.map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        {allDiseaseBarData.length === 0 ? (
                           <div className="text-center text-gray-400">
                             No data available
                           </div>
                         ) : (
-                          <ResponsiveContainer width="100%" height={240}>
-                            <BarChart data={barData}>
-                              <CartesianGrid
-                                strokeDasharray="3 3"
-                                stroke="#CBD5E0"
-                              />
-                              <XAxis dataKey="category" />
-                              <YAxis />
-                              <Tooltip />
-                              <Legend />
-                              <Bar dataKey="value" fill="#F687B3" />
-                            </BarChart>
-                          </ResponsiveContainer>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {allDiseaseBarData
+                              .filter(
+                                (d) =>
+                                  !filter.disease ||
+                                  d.disease === filter.disease
+                              )
+                              .map((diseaseBar) => (
+                                <div key={diseaseBar.disease}>
+                                  <div className="font-semibold text-pink-700 dark:text-pink-300 mb-2">
+                                    Cities with &quot;{diseaseBar.disease}&quot;
+                                    cases:
+                                  </div>
+                                  <ResponsiveContainer
+                                    width="100%"
+                                    height={200}
+                                  >
+                                    <BarChart data={diseaseBar.data}>
+                                      <CartesianGrid
+                                        strokeDasharray="3 3"
+                                        stroke="#CBD5E0"
+                                      />
+                                      <XAxis dataKey="category" />
+                                      <YAxis />
+                                      <Tooltip />
+                                      <Legend />
+                                      <Bar dataKey="value" fill="#F687B3" />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                  <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+                                    {diseaseBar.data.map((d) => (
+                                      <div key={d.category}>
+                                        {d.category}: {d.value}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
                         )}
                       </Card>
                     </div>
@@ -849,7 +1103,8 @@ export default function PredictorPage() {
                           <th className="p-2">Name</th>
                           <th className="p-2">Age</th>
                           <th className="p-2">Gender</th>
-                          <th className="p-2">Region</th>
+                          <th className="p-2">Country</th>
+                          <th className="p-2">District</th>
                           <th className="p-2">Actions</th>
                         </tr>
                       </thead>
@@ -862,7 +1117,8 @@ export default function PredictorPage() {
                             <td className="p-2">{p.fullName}</td>
                             <td className="p-2">{p.age}</td>
                             <td className="p-2 capitalize">{p.gender}</td>
-                            <td className="p-2">{p.region || "N/A"}</td>
+                            <td className="p-2">{p.country || "N/A"}</td>
+                            <td className="p-2">{p.district || "N/A"}</td>
                             <td className="p-2 flex gap-2">
                               <Button
                                 className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
@@ -967,7 +1223,6 @@ export default function PredictorPage() {
                           </div>
                         )}
                         <div>
-                          <label className="block mb-1">Weight (kg)</label>
                           <input
                             type="number"
                             min={1}
@@ -985,24 +1240,48 @@ export default function PredictorPage() {
                           />
                         </div>
                         <div>
-                          <label className="block mb-1">Region</label>
+                          <label className="block mb-1">Country</label>
                           <select
                             className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                            value={newPatient.region}
+                            value={newPatient.country}
                             onChange={(e) =>
                               setNewPatient({
                                 ...newPatient,
-                                region: e.target.value,
+                                country: e.target.value,
+                                district: "",
                               })
                             }
                             required
                           >
-                            <option value="">Select Region</option>
-                            {regions.map((r) => (
-                              <option key={r} value={r}>
-                                {r}
+                            <option value="">Select Country</option>
+                            {Object.keys(countries).map((c) => (
+                              <option key={c} value={c}>
+                                {c}
                               </option>
                             ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block mb-1">District</label>
+                          <select
+                            className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                            value={newPatient.district}
+                            onChange={(e) =>
+                              setNewPatient({
+                                ...newPatient,
+                                district: e.target.value,
+                              })
+                            }
+                            required
+                            disabled={!newPatient.country}
+                          >
+                            <option value="">Select District</option>
+                            {newPatient.country &&
+                              countries[newPatient.country].map((d) => (
+                                <option key={d} value={d}>
+                                  {d}
+                                </option>
+                              ))}
                           </select>
                         </div>
                         <div className="flex items-center gap-2">
@@ -1077,10 +1356,17 @@ export default function PredictorPage() {
                             kg
                           </p>
                           <p>
-                            <strong>Region:</strong>{" "}
+                            <strong>Country:</strong>{" "}
                             {
                               patients.find((p) => p.id === showAddRecord)
-                                ?.region
+                                ?.country
+                            }
+                          </p>
+                          <p>
+                            <strong>District:</strong>{" "}
+                            {
+                              patients.find((p) => p.id === showAddRecord)
+                                ?.district
                             }
                           </p>
                           {patients.find((p) => p.id === showAddRecord)
@@ -1136,8 +1422,7 @@ export default function PredictorPage() {
                           <label className="block mb-1">
                             Previous Medications
                           </label>
-                          <input
-                            type="text"
+                          <select
                             className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
                             value={recordForm.previousMedications}
                             onChange={(e) =>
@@ -1146,8 +1431,15 @@ export default function PredictorPage() {
                                 previousMedications: e.target.value,
                               })
                             }
-                            placeholder="e.g., None, Quinine"
-                          />
+                            required
+                          >
+                            <option value="">Select Medication</option>
+                            {previous_medications.map((med) => (
+                              <option key={med} value={med}>
+                                {med}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div className="flex gap-2 justify-end">
                           <Button
@@ -1196,6 +1488,33 @@ export default function PredictorPage() {
                         const patientRecords = records.filter(
                           (r) => r.patientId === patient.id
                         );
+
+                        const userId = session?.user?.email;
+                        const totalPatientsByUser = patients.filter(
+                          (p) => p.userId === userId
+                        ).length;
+                        const totalRecordsByUser = records.filter(
+                          (r) => r.userId === userId
+                        ).length;
+                        const totalPredictionsByUser = records.filter(
+                          (r) => r.userId === userId && r.predictionResult
+                        ).length;
+                        const totalTreatmentsByUser = records.filter(
+                          (r) =>
+                            r.userId === userId &&
+                            typeof r.predictionResult
+                              ?.treatmentRecommendation === "object" &&
+                            r.predictionResult?.treatmentRecommendation !==
+                              null &&
+                            "recommendedTreatment" in
+                              r.predictionResult.treatmentRecommendation &&
+                            (
+                              r.predictionResult.treatmentRecommendation as {
+                                recommendedTreatment?: string;
+                              }
+                            ).recommendedTreatment
+                        ).length;
+
                         return (
                           <>
                             <div className="grid grid-cols-2 gap-4 mb-6">
@@ -1212,11 +1531,16 @@ export default function PredictorPage() {
                                 <p>
                                   <strong>Weight:</strong> {patient.weight} kg
                                 </p>
+                                <p>
+                                  <strong>Country:</strong>{" "}
+                                  {patient.country || "N/A"}
+                                </p>
+                                <p>
+                                  <strong>District:</strong>{" "}
+                                  {patient.district || "N/A"}
+                                </p>
                               </div>
                               <div>
-                                <p>
-                                  <strong>Region:</strong> {patient.region}
-                                </p>
                                 <p>
                                   <strong>Pregnant:</strong>{" "}
                                   {patient.pregnantStatus || "N/A"}
@@ -1229,6 +1553,40 @@ export default function PredictorPage() {
                                   <strong>Records:</strong>{" "}
                                   {patientRecords.length}
                                 </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 mb-6">
+                              <div className="bg-blue-50 dark:bg-blue-900 rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold">
+                                  {totalPatientsByUser}
+                                </div>
+                                <div className="text-gray-700 dark:text-gray-200">
+                                  Total Patients he created
+                                </div>
+                              </div>
+                              <div className="bg-purple-50 dark:bg-purple-900 rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold">
+                                  {totalRecordsByUser}
+                                </div>
+                                <div className="text-gray-700 dark:text-gray-200">
+                                  Medical Records he made
+                                </div>
+                              </div>
+                              <div className="bg-green-50 dark:bg-green-900 rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold">
+                                  {totalPredictionsByUser}
+                                </div>
+                                <div className="text-gray-700 dark:text-gray-200">
+                                  Predictions Made he made
+                                </div>
+                              </div>
+                              <div className="bg-yellow-50 dark:bg-yellow-900 rounded-lg p-4 text-center">
+                                <div className="text-2xl font-bold">
+                                  {totalTreatmentsByUser}
+                                </div>
+                                <div className="text-gray-700 dark:text-gray-200">
+                                  Treatments he made
+                                </div>
                               </div>
                             </div>
                             <h4 className="font-semibold mb-2">
@@ -1326,134 +1684,254 @@ export default function PredictorPage() {
                     ))}
                   </Card>
                 ) : (
-                  <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-gray-200 dark:border-gray-700">
-                    <table className="w-full text-left border-separate border-spacing-y-2">
-                      <thead className="sticky top-0 z-10 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800">
-                        <tr>
-                          <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
-                            Patient
-                          </th>
-                          <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
-                            Date
-                          </th>
-                          <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
-                            Symptoms
-                          </th>
-                          <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
-                            Disease
-                          </th>
-                          <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
-                            Treatment
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {records.map((r, i) => (
-                          <tr
-                            key={r.id}
-                            className={`transition-colors duration-200 border-b-2 border-blue-100 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer ${
-                              i % 2 === 0
-                                ? "bg-blue-50 dark:bg-gray-900"
-                                : "bg-white dark:bg-gray-800"
-                            }`}
-                            onClick={() => setSelectedRecord(r)}
-                          >
-                            <td className="p-3 font-medium text-gray-800 dark:text-gray-100">
-                              {
-                                patients.find((p) => p.id === r.patientId)
-                                  ?.fullName
-                              }
-                            </td>
-                            <td className="p-3 text-gray-600 dark:text-gray-300">
-                              {new Date(r.createdAt).toLocaleDateString()}
-                            </td>
-                            <td className="p-3 text-gray-700 dark:text-gray-200">
-                              {r.symptoms.join(", ")}
-                            </td>
-                            <td className="p-3">
-                              {r.predictionResult?.predictedDisease ? (
-                                <span className="inline-block px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs font-semibold">
-                                  {r.predictionResult.predictedDisease}
-                                </span>
-                              ) : (
-                                <span className="inline-block px-2 py-1 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 text-xs font-semibold">
-                                  Pending
-                                </span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              {typeof r.predictionResult
-                                ?.treatmentRecommendation === "object" &&
-                              r.predictionResult?.treatmentRecommendation !==
-                                null &&
-                              "recommendedTreatment" in
-                                r.predictionResult.treatmentRecommendation &&
-                              (
-                                r.predictionResult.treatmentRecommendation as {
-                                  recommendedTreatment?: string;
-                                }
-                              ).recommendedTreatment ? (
-                                <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 text-xs font-semibold">
-                                  {
-                                    (
-                                      r.predictionResult
-                                        .treatmentRecommendation as {
-                                        recommendedTreatment?: string;
-                                      }
-                                    ).recommendedTreatment
-                                  }
-                                </span>
-                              ) : (
-                                <span className="inline-block px-2 py-1 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 text-xs font-semibold">
-                                  Pending
-                                </span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {selectedRecord && (
-                      <div className="mt-8 p-5 rounded-lg bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 shadow">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-semibold text-blue-800 dark:text-blue-200">
-                            Treatment Notes for{" "}
-                            {
-                              patients.find(
-                                (p) => p.id === selectedRecord.patientId
-                              )?.fullName
-                            }
-                          </h3>
-                          <Button
-                            className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
-                            onClick={() => setSelectedRecord(null)}
-                          >
-                            Close
-                          </Button>
-                        </div>
-                        <pre className="whitespace-pre-wrap break-words text-gray-700 dark:text-gray-200 text-sm">
-                          {typeof selectedRecord.predictionResult
-                            ?.treatmentRecommendation === "object" &&
-                          selectedRecord.predictionResult
-                            ?.treatmentRecommendation !== null &&
-                          "notes" in
-                            selectedRecord.predictionResult
-                              .treatmentRecommendation &&
-                          typeof selectedRecord.predictionResult
-                            .treatmentRecommendation.notes === "string" &&
-                          selectedRecord.predictionResult
-                            .treatmentRecommendation.notes
-                            ? renderNotes(
-                                JSON.parse(
-                                  selectedRecord.predictionResult
-                                    .treatmentRecommendation.notes
-                                )
-                              )
-                            : "No notes available."}
-                        </pre>
+                  <>
+                    <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6 mb-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <LineChartIcon className="text-pink-500" />
+                        <h3 className="text-lg font-semibold">
+                          Record Comparison
+                        </h3>
                       </div>
-                    )}
-                  </div>
+                      <div className="flex flex-wrap gap-4 mb-4">
+                        <div>
+                          <label className="block text-xs mb-1">Country</label>
+                          <select
+                            className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                            value={filter.country}
+                            onChange={(e) =>
+                              setFilter((f) => ({
+                                ...f,
+                                country: e.target.value,
+                                district: "",
+                              }))
+                            }
+                          >
+                            <option value="">All</option>
+                            {allCountries.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs mb-1">District</label>
+                          <select
+                            className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                            value={filter.district}
+                            onChange={(e) =>
+                              setFilter((f) => ({
+                                ...f,
+                                district: e.target.value,
+                              }))
+                            }
+                            disabled={!filter.country}
+                          >
+                            <option value="">All</option>
+                            {allDistricts.map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs mb-1">Disease</label>
+                          <select
+                            className="px-2 py-1 rounded border dark:bg-gray-700 dark:border-gray-600"
+                            value={filter.disease}
+                            onChange={(e) =>
+                              setFilter((f) => ({
+                                ...f,
+                                disease: e.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">All</option>
+                            {allDiseases.map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {allDiseaseBarData.length === 0 ? (
+                        <div className="text-center text-gray-400">
+                          No data available
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {allDiseaseBarData
+                            .filter(
+                              (d) =>
+                                !filter.disease || d.disease === filter.disease
+                            )
+                            .map((diseaseBar) => (
+                              <div key={diseaseBar.disease}>
+                                <div className="font-semibold text-pink-700 dark:text-pink-300 mb-2">
+                                  Cities with &quot;{diseaseBar.disease}&quot;
+                                  cases:
+                                </div>
+                                <ResponsiveContainer width="100%" height={200}>
+                                  <BarChart data={diseaseBar.data}>
+                                    <CartesianGrid
+                                      strokeDasharray="3 3"
+                                      stroke="#CBD5E0"
+                                    />
+                                    <XAxis dataKey="category" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="value" fill="#F687B3" />
+                                  </BarChart>
+                                </ResponsiveContainer>
+                                <div className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+                                  {diseaseBar.data.map((d) => (
+                                    <div key={d.category}>
+                                      {d.category}: {d.value}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </Card>
+
+                    <Card className="bg-white dark:bg-gray-800 rounded-xl shadow p-6">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-separate border-spacing-y-2">
+                          <thead className="sticky top-0 z-10 bg-gradient-to-r from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800">
+                            <tr>
+                              <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
+                                Patient
+                              </th>
+                              <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
+                                Date
+                              </th>
+                              <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
+                                Symptoms
+                              </th>
+                              <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
+                                Disease
+                              </th>
+                              <th className="p-3 text-blue-900 dark:text-blue-200 font-semibold">
+                                Treatment
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {records.map((r, i) => (
+                              <tr
+                                key={r.id}
+                                className={`transition-colors duration-200 border-b-2 border-blue-100 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer ${
+                                  i % 2 === 0
+                                    ? "bg-blue-50 dark:bg-gray-900"
+                                    : "bg-white dark:bg-gray-800"
+                                }`}
+                                onClick={() => setSelectedRecord(r)}
+                              >
+                                <td className="p-3 font-medium text-gray-800 dark:text-gray-100">
+                                  {
+                                    patients.find((p) => p.id === r.patientId)
+                                      ?.fullName
+                                  }
+                                </td>
+                                <td className="p-3 text-gray-600 dark:text-gray-300">
+                                  {new Date(r.createdAt).toLocaleDateString()}
+                                </td>
+                                <td className="p-3 text-gray-700 dark:text-gray-200">
+                                  {r.symptoms.join(", ")}
+                                </td>
+                                <td className="p-3">
+                                  {r.predictionResult?.predictedDisease ? (
+                                    <span className="inline-block px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs font-semibold">
+                                      {r.predictionResult.predictedDisease}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-block px-2 py-1 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 text-xs font-semibold">
+                                      Pending
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="p-3">
+                                  {typeof r.predictionResult
+                                    ?.treatmentRecommendation === "object" &&
+                                  r.predictionResult
+                                    ?.treatmentRecommendation !== null &&
+                                  "recommendedTreatment" in
+                                    r.predictionResult
+                                      .treatmentRecommendation &&
+                                  (
+                                    r.predictionResult
+                                      .treatmentRecommendation as {
+                                      recommendedTreatment?: string;
+                                    }
+                                  ).recommendedTreatment ? (
+                                    <span className="inline-block px-2 py-1 rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 text-xs font-semibold">
+                                      {
+                                        (
+                                          r.predictionResult
+                                            .treatmentRecommendation as {
+                                            recommendedTreatment?: string;
+                                          }
+                                        ).recommendedTreatment
+                                      }
+                                    </span>
+                                  ) : (
+                                    <span className="inline-block px-2 py-1 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 text-xs font-semibold">
+                                      Pending
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {selectedRecord && (
+                          <div className="mt-8 p-5 rounded-lg bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 shadow">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-blue-800 dark:text-blue-200">
+                                Treatment Notes for{" "}
+                                {
+                                  patients.find(
+                                    (p) => p.id === selectedRecord.patientId
+                                  )?.fullName
+                                }
+                              </h3>
+                              <Button
+                                className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
+                                onClick={() => setSelectedRecord(null)}
+                              >
+                                Close
+                              </Button>
+                            </div>
+                            <pre className="whitespace-pre-wrap break-words text-gray-700 dark:text-gray-200 text-sm">
+                              {typeof selectedRecord.predictionResult
+                                ?.treatmentRecommendation === "object" &&
+                              selectedRecord.predictionResult
+                                ?.treatmentRecommendation !== null &&
+                              "notes" in
+                                selectedRecord.predictionResult
+                                  .treatmentRecommendation &&
+                              typeof selectedRecord.predictionResult
+                                .treatmentRecommendation.notes === "string" &&
+                              selectedRecord.predictionResult
+                                .treatmentRecommendation.notes
+                                ? renderNotes(
+                                    JSON.parse(
+                                      selectedRecord.predictionResult
+                                        .treatmentRecommendation.notes
+                                    )
+                                  )
+                                : "No notes available."}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  </>
                 )}
               </section>
             )}
@@ -1464,7 +1942,7 @@ export default function PredictorPage() {
                   <div className="h-32 bg-gradient-to-r from-blue-400 to-purple-400 relative">
                     <div className="absolute left-1/2 -bottom-12 transform -translate-x-1/2">
                       <Image
-                        src={profile.photo}
+                        src={profile.photo || "/avatar.png"}
                         alt="Profile"
                         width={96}
                         height={96}
@@ -1494,81 +1972,88 @@ export default function PredictorPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 col-span-2 space-y-4">
-                    <h3 className="font-semibold mb-2">Personal Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSaveProfile}>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 col-span-2 space-y-4">
+                      <h3 className="font-semibold mb-2">
+                        Personal Information
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block mb-1">Full Name</label>
+                          <input
+                            type="text"
+                            name="name"
+                            className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                            value={profile.name}
+                            onChange={handleProfileChange}
+                          />
+                        </div>
+                        <div>
+                          <label className="block mb-1">Phone Number</label>
+                          <input
+                            type="text"
+                            name="phone"
+                            className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                            value={profile.phone}
+                            onChange={handleProfileChange}
+                          />
+                        </div>
+                      </div>
                       <div>
-                        <label className="block mb-1">Full Name</label>
+                        <label className="block mb-1">Email Address</label>
                         <input
-                          type="text"
-                          name="name"
+                          type="email"
+                          name="email"
                           className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                          value={profile.name}
+                          value={profile.email}
                           onChange={handleProfileChange}
                         />
                       </div>
                       <div>
-                        <label className="block mb-1">Phone Number</label>
-                        <input
-                          type="text"
-                          name="phone"
+                        <label className="block mb-1">Bio</label>
+                        <textarea
+                          name="bio"
                           className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                          value={profile.phone}
+                          value={profile.bio}
                           onChange={handleProfileChange}
+                          rows={3}
                         />
+                      </div>
+                      <div className="flex gap-2 justify-end">
+                        <Button
+                          type="submit"
+                          className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2"
+                        >
+                          Save Changes
+                        </Button>
                       </div>
                     </div>
-                    <div>
-                      <label className="block mb-1">Email Address</label>
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
+                      <h3 className="font-semibold mb-2">Your Photo</h3>
+                      <Image
+                        src={profile.photo || "/avatar.png"}
+                        alt="Profile"
+                        width={96}
+                        height={96}
+                        className="w-24 h-24 rounded-full border mb-4 object-cover"
+                      />
                       <input
-                        type="email"
-                        name="email"
-                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                        value={profile.email}
-                        onChange={handleProfileChange}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        id="photo-upload"
+                        onChange={handlePhotoChange}
                       />
-                    </div>
-                    <div>
-                      <label className="block mb-1">Bio</label>
-                      <textarea
-                        name="bio"
-                        className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
-                        value={profile.bio}
-                        onChange={handleProfileChange}
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button className="flex items-center px-3 py-2 rounded-lg bg-gradient-to-tr from-pink-500 to-yellow-500 text-white font-semibold shadow-lg hover:shadow-xl transition-all duration-300 gap-2">
-                        Save Changes
-                      </Button>
+                      <label
+                        htmlFor="photo-upload"
+                        className="block w-full text-center cursor-pointer text-blue-600 hover:underline mb-2"
+                      >
+                        Update Photo
+                      </label>
                     </div>
                   </div>
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
-                    <h3 className="font-semibold mb-2">Your Photo</h3>
-                    <Image
-                      src={profile.photo}
-                      alt="Profile"
-                      width={96}
-                      height={96}
-                      className="w-24 h-24 rounded-full border mb-4 object-cover"
-                    />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      id="photo-upload"
-                      onChange={handlePhotoChange}
-                    />
-                    <label
-                      htmlFor="photo-upload"
-                      className="block w-full text-center cursor-pointer text-blue-600 hover:underline mb-2"
-                    >
-                      Update Photo
-                    </label>
-                  </div>
-                </div>
+                </form>
               </section>
             )}
           </div>
