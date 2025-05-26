@@ -40,14 +40,21 @@ export const authOptions = {
         const user = await prisma.user.findUnique({
           where: { email: credentials.email },
         });
-        if (!user) return null;
+        if (!user) {
+          console.error("No user found for email:", credentials.email);
+          return null;
+        }
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          console.error("Invalid password for user:", credentials.email);
+          return null;
+        }
+        // Ensure all required fields are strings
         return {
           id: user.id.toString(),
-          name: user.name,
-          email: user.email,
-          role: user.role,
+          name: user.name || "",
+          email: user.email || "",
+          role: user.role || null,
         };
       },
     }),
@@ -67,11 +74,13 @@ export const authOptions = {
     },
   },
   pages: {
-    signIn: "/admin/login",
+    signIn: "/login", // Change to your actual login page if needed
+    error: "/login",  // Redirect errors to login page
   },
   session: {
     strategy: "jwt" as const,
   },
+  secret: process.env.NEXTAUTH_SECRET || "changeme-secret", // Add secret for production
 };
 
 // NextAuth handler
