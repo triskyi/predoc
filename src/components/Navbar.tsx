@@ -33,7 +33,7 @@ export default function Navbar() {
           href="/ai-playground"
           className="text-cyan-200 hover:text-fuchsia-400 font-medium transition"
         >
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 rounded px-2 py-1 bg-gradient-to-r from-fuchsia-600 to-cyan-500 text-white shadow border border-cyan-800">
             <Rocket size={16} /> AI Playground
           </span>
         </Link>
