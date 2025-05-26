@@ -341,7 +341,14 @@ export default function PredictorPage() {
     }
   };
 
-  const filteredPatients = patients.filter(
+  // Get current user id/email for filtering
+  const currentUserId = session?.user?.email;
+
+  // Filter patients and records to only those created by the current user
+  const myPatients = patients.filter((p) => p.userId === currentUserId);
+  const myRecords = records.filter((r) => r.userId === currentUserId);
+
+  const filteredPatients = myPatients.filter(
     (p) =>
       p.fullName.toLowerCase().includes(search.toLowerCase()) ||
       p.country?.toLowerCase().includes(search.toLowerCase())
@@ -527,9 +534,9 @@ export default function PredictorPage() {
 
   const COLORS = ["#34d399", "#60a5fa", "#fbbf24", "#f87171", "#a78bfa"];
   const diseaseData =
-    records.length > 0
+    myRecords.length > 0
       ? Object.entries(
-          records.reduce((acc, r) => {
+          myRecords.reduce((acc, r) => {
             const d = r.predictionResult?.predictedDisease || "Unknown";
             acc[d] = (acc[d] || 0) + 1;
             return acc;
@@ -547,7 +554,7 @@ export default function PredictorPage() {
 
   const cityDiseaseCount: Record<string, number> = {};
   if (mostPredictedDisease) {
-    records.forEach((r) => {
+    myRecords.forEach((r) => {
       if (r.predictionResult?.predictedDisease === mostPredictedDisease.name) {
         const patient = patients.find((p) => p.id === r.patientId);
         const city =
@@ -561,7 +568,7 @@ export default function PredictorPage() {
 
   const lineData = (() => {
     const dateCounts: Record<string, number> = {};
-    records.forEach((r) => {
+    myRecords.forEach((r) => {
       const date = new Date(r.createdAt).toLocaleDateString();
       dateCounts[date] = (dateCounts[date] || 0) + 1;
     });
@@ -625,7 +632,7 @@ export default function PredictorPage() {
     const filteredPatientIds = new Set(filteredPatients.map((p) => p.id));
 
     const diseaseDistrictMap: Record<string, Record<string, number>> = {};
-    records.forEach((r) => {
+    myRecords.forEach((r) => {
       const disease = r.predictionResult?.predictedDisease || "Unknown";
       if (!filteredPatientIds.has(r.patientId)) return;
       const patient = patients.find((p) => p.id === r.patientId);
@@ -798,7 +805,7 @@ export default function PredictorPage() {
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
                         <Users className="text-blue-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
-                          {patients.length}
+                          {myPatients.length}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Total Patients
@@ -807,7 +814,7 @@ export default function PredictorPage() {
                       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 flex flex-col items-center">
                         <FileText className="text-purple-500 mb-2" size={28} />
                         <div className="text-2xl font-bold">
-                          {records.length}
+                          {myRecords.length}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Medical Records
@@ -819,7 +826,7 @@ export default function PredictorPage() {
                           size={28}
                         />
                         <div className="text-2xl font-bold">
-                          {records.filter((r) => r.predictionResult).length}
+                          {myRecords.filter((r) => r.predictionResult).length}
                         </div>
                         <div className="text-gray-500 text-sm">
                           Predictions Made
@@ -1348,7 +1355,7 @@ export default function PredictorPage() {
                             </>
                           );
                         }
-                        const patientRecords = records.filter(
+                        const patientRecords = myRecords.filter(
                           (r) => r.patientId === patient.id
                         );
 
@@ -1685,7 +1692,7 @@ export default function PredictorPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {records.map((r, i) => (
+                            {myRecords.map((r, i) => (
                               <tr
                                 key={r.id}
                                 className={`transition-colors duration-200 border-b-2 border-blue-100 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-900 cursor-pointer ${
