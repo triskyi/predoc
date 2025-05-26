@@ -1212,7 +1212,7 @@ export default function PredictorPage() {
                           </div>
                         )}
                         <div>
-                          <label className="block mb-1">Country</label>
+                          <label className="block mb-1">Weight</label>
                           <input
                             type="number"
                             min={1}
